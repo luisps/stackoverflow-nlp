@@ -1,6 +1,7 @@
 
 *.swp
 __pycache__
+*.hf5
 
 data/
 mappings/
