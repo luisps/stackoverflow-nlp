@@ -4,9 +4,6 @@ import os
 from global_variables import *
 import json
 
-in_file = 'first-500.pkl'
-#in_file = 'whole-pt.pkl'
-
 with open(os.path.join(data_dir, in_file), 'rb') as f:
     data = pickle.load(f)
 

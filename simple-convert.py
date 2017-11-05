@@ -33,19 +33,21 @@ def row_process(elem):
     body = elem.attrib['Body']
     tag_str = elem.attrib['Tags']
     creation_date = elem.attrib['CreationDate'][:10]
+
     tags = tuple(tag_re.findall(tag_str))
+    date_year = int(creation_date[:4])
+    date_month = int(creation_date[5:7])
 
     body_list.append(body)
     tags_list.append(tags)
-    creation_date_list.append(creation_date)
+    creation_date_list.append((date_year, date_month))
 
 
 region = 'pt'
 posts_file = os.path.join('..', region + '.stackoverflow.com', 'Posts.xml')
 
-out_file = 'whole-pt.pkl'
-use_end_posts = False
-total_posts = 5000
+use_end_posts = True
+total_posts = 500
 
 
 tag_re = re.compile('<(.*?)>')
@@ -58,5 +60,5 @@ fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
 
 data = (body_list, tags_list, creation_date_list)
 
-with open(os.path.join(data_dir, out_file), 'wb') as f:
+with open(os.path.join(data_dir, in_file), 'wb') as f:
     pickle.dump(data, f)
