@@ -31,11 +31,11 @@ z = sorted(tag_count, key=tag_count.get)[::-1]
 most_common = 20
 least_common = 20
 
-print('\nThe', most_common, 'most common tags')
-print(', '.join(z[:most_common]))
+#print('\nThe', most_common, 'most common tags')
+#print(', '.join(z[:most_common]))
 
-print('\nThe', least_common, 'least common tags')
-print(', '.join(z[-least_common:]))
+#print('\nThe', least_common, 'least common tags')
+#print(u', '.join(z[-least_common:]))
 
 
 keep_tags = z[:total_keep_tags]
