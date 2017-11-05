@@ -38,8 +38,6 @@ print('\nThe', least_common, 'least common tags')
 print(', '.join(z[-least_common:]))
 
 
-total_keep_tags = 50
-
 keep_tags = z[:total_keep_tags]
 tag_to_index = {tag:i for i, tag in enumerate(keep_tags)}
 save_mapping = True
@@ -68,7 +66,7 @@ for post_idx in removing_posts_idxs[::-1]:
 
 
 data = (post_body, tags, creation_date)
-out_file = in_file[:-4] + '-tagged.pkl'
+out_file = in_file[:-4] + '-tag-processed.pkl'
 
 with open(os.path.join(data_dir, out_file), 'wb') as f:
     pickle.dump(data, f)

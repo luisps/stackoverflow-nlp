@@ -11,7 +11,7 @@ def text_preprocess(body):
     return words
 
 
-with open(os.path.join(data_dir, in_file[:-4] + '-tagged.pkl'), 'rb') as f:
+with open(os.path.join(data_dir, in_file[:-4] + '-tag-processed.pkl'), 'rb') as f:
     data = pickle.load(f)
 
 post_body, tags, creation_date = data
@@ -30,16 +30,13 @@ for post_idx in range(num_posts):
 
 
 #delete some words which shouldn't be useful
-min_word_count = 2
-max_word_len = 30
-total_keep_words = 1000
 save_mapping = True
 
 word_count = {word:count for word, count in word_count.items() if count >= min_word_count and len(word) < max_word_len}
 
 
 z = sorted(word_count, key=word_count.get)[::-1]
-keep_words = z[:total_keep_words]
+keep_words = z[total_skip_top:total_keep_words]
 word_to_index = {word:i for i, word in enumerate(keep_words)}
 
 if save_mapping:

@@ -47,7 +47,7 @@ region = 'pt'
 posts_file = os.path.join('..', region + '.stackoverflow.com', 'Posts.xml')
 
 use_end_posts = True
-total_posts = 500
+total_posts = 5000
 
 
 tag_re = re.compile('<(.*?)>')
