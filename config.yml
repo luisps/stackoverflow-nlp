@@ -1,4 +1,12 @@
-posts_dir: stackoverflow_posts
-data_dir: data
-mappings_dir: mappings
-region: pt
+dir_name:
+  posts: stackoverflow_posts
+  data: data
+  mappings: mappings
+xml_extract:
+  region: pt
+  begin_year: 2015
+  begin_month: 1
+dataset_size:
+  training_set: 10000
+  validation_set: 2000
+  test_set: 10000
