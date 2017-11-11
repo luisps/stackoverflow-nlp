@@ -3,18 +3,34 @@ from collections import defaultdict
 import os
 from global_variables import *
 import json
+import yaml
+import random
+
+with open('config.yml', 'r') as f:
+    config = yaml.load(f)
+
+data_dir = config['dir_name']['data']
+
+training_size = config['dataset_size']['training_set']
+validation_size = config['dataset_size']['validation_set']
+test_size = config['dataset_size']['test_set']
 
 with open(os.path.join(data_dir, in_file), 'rb') as f:
     data = pickle.load(f)
 
-post_body, tags, creation_date = data
-num_posts = len(post_body)
-del data
+#before proceeding we must shuffle the data
+#not doing so would mean our data was time dependent, that the test set would
+#always be in the future compared to the training set, similar to a time series dataset
+#while that scenario is indeed realistic it would further complicate our problem unnecessarily
+random.shuffle(data)
 
+exit()
+num_post = len(post_body)
 tag_count = defaultdict(int)
 num_tags = defaultdict(int)
 
-for post_idx in range(num_posts):
+#iterate all posts of the training set
+for post_idx in range(training_size):
 
     #tags
     num_tags[len(tags[post_idx])] += 1
@@ -65,7 +81,7 @@ for post_idx in removing_posts_idxs[::-1]:
     del creation_date[post_idx]
 
 
-data = (post_body, tags, creation_date)
+data = (post_body, tags)
 out_file = in_file[:-4] + '-tag-processed.pkl'
 
 with open(os.path.join(data_dir, out_file), 'wb') as f:

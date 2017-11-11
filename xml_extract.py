@@ -47,11 +47,9 @@ def row_process(elem):
 
     body = elem.attrib['Body']
     tag_str = elem.attrib['Tags']
-
     tags = tuple(tag_re.findall(tag_str))
 
-    body_list.append(body)
-    tags_list.append(tags)
+    data.append((body, tags))
 
 
 with open('config.yml', 'r') as f:
@@ -70,21 +68,19 @@ test_size = config['dataset_size']['test_set']
 
 posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
 
-read_extra = 0.2
 total_posts = training_size + validation_size + test_size
-total_posts = int((1. + read_extra) * total_posts)
+
+#to do - explain here
+read_extra = 0.2
+total_posts *= (1. + read_extra)
+total_posts = int(total_posts)
 
 
-tag_re = re.compile('<(.*?)>')
-
-body_list = []
-tags_list = []
-"""
 use_end_posts = True
-fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
+tag_re = re.compile('<(.*?)>')
+data = []
 
-data = (body_list, tags_list)
+fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
 
 with open(os.path.join(data_dir, in_file), 'wb') as f:
     pickle.dump(data, f)
-"""
