@@ -1,7 +1,6 @@
 from keras.models import Sequential
-from keras.layers import Dense, Dropout
-from keras.layers import Embedding
-from keras.layers import LSTM
+from keras.layers import Dense, Dropout, Embedding, LSTM
+from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras import backend as K
 import tensorflow as tf
 
@@ -24,18 +23,12 @@ def tf_weighted_binary_crossentropy(target, output, from_logits=False, pos_weigh
     return tf.nn.weighted_cross_entropy_with_logits(targets=target,
                                        logits=output, pos_weight=pos_weight)
 
-'''
 embedding_dim = 512
 hidden_dim = 512
-num_layers = 3
-'''
-embedding_dim = 128
-hidden_dim = 128
 num_layers = 1
 
-
-batch_size = 256
-epochs = 1
+batch_size = 128
+epochs = 100
 
 with open(os.path.join(data_dir, in_file[:-4] + '-ready.pkl'), 'rb') as f:
     data = pickle.load(f)
@@ -57,6 +50,19 @@ model.compile(optimizer='adam',
               loss=weighted_binary_crossentropy,
               metrics=['accuracy'])
 
-model.summary()
+#model.summary()
 
-#model.fit(x, y, batch_size=batch_size, epochs=epochs)
+file_path = 'model_layers-1_hidden-512.h5'
+checkpoint = ModelCheckpoint(file_path, monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False)
+#early_stopping = EarlyStopping(monitor='val_loss', verbose=1, patience=6)
+
+#model.load(file_path)
+
+history = model.fit(x, y,
+                    batch_size=batch_size,
+                    epochs=epochs,
+                    validation_split=0.2,
+                    verbose=2,
+                    callbacks=[checkpoint]
+                   )
+
