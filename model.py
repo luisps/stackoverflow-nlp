@@ -1,5 +1,5 @@
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Embedding, LSTM
+from keras.layers import Dense, Embedding, LSTM
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras import backend as K
 import tensorflow as tf
@@ -26,6 +26,8 @@ def tf_weighted_binary_crossentropy(target, output, from_logits=False, pos_weigh
 embedding_dim = 512
 hidden_dim = 512
 num_layers = 1
+input_dropout = 0.2
+recurrent_dropout = 0.2
 
 batch_size = 128
 epochs = 100
@@ -41,8 +43,9 @@ model = Sequential()
 model.add(Embedding(vocab_size, embedding_dim, input_length=max_seq_len))
 
 for _ in range(num_layers-1):
-    model.add(LSTM(hidden_dim, return_sequences=True))
-model.add(LSTM(hidden_dim))
+    model.add(LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout, return_sequences=True))
+
+model.add(LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout))
 
 model.add(Dense(total_keep_tags, activation='sigmoid'))
 
