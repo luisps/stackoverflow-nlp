@@ -56,11 +56,12 @@ model.compile(optimizer='adam',
 #model.summary()
 
 file_path = 'model_layers-1_hidden-512.h5'
-checkpoint = ModelCheckpoint(file_path, monitor='val_acc', verbose=1, save_best_only=True, save_weights_only=False)
+checkpoint = ModelCheckpoint(file_path, monitor='val_acc', verbose=0, save_best_only=True, save_weights_only=False)
 #early_stopping = EarlyStopping(monitor='val_loss', verbose=1, patience=6)
 
 #model.load(file_path)
 
+print('Started training')
 history = model.fit(x, y,
                     batch_size=batch_size,
                     epochs=epochs,
