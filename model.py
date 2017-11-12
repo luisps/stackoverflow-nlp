@@ -1,5 +1,5 @@
 from keras.models import Sequential
-from keras.layers import Dense, Embedding, LSTM
+from keras.layers import Dense, Embedding, LSTM, Bidirectional
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras import backend as K
 import tensorflow as tf
@@ -43,9 +43,9 @@ model = Sequential()
 model.add(Embedding(vocab_size, embedding_dim, input_length=max_seq_len))
 
 for _ in range(num_layers-1):
-    model.add(LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout, return_sequences=True))
+    model.add(Bidirectional(LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout, return_sequences=True)))
 
-model.add(LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout))
+model.add(Bidirectional(LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout)))
 
 model.add(Dense(total_keep_tags, activation='sigmoid'))
 
@@ -59,14 +59,13 @@ file_path = 'model_layers-1_hidden-512.h5'
 checkpoint = ModelCheckpoint(file_path, monitor='val_acc', verbose=0, save_best_only=True, save_weights_only=False)
 #early_stopping = EarlyStopping(monitor='val_loss', verbose=1, patience=6)
 
-#model.load(file_path)
+#model = load_model(file_path)
 
 print('Started training')
 history = model.fit(x, y,
                     batch_size=batch_size,
                     epochs=epochs,
                     validation_split=0.2,
-                    verbose=2,
-                    callbacks=[checkpoint]
+                    verbose=2#,
+#                    callbacks=[checkpoint]
                    )
-
