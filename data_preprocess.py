@@ -21,6 +21,9 @@ num_keep_tags = config['data_preprocess']['keep_tags']
 num_keep_words = config['data_preprocess']['keep_words']
 skip_top = config['data_preprocess']['skip_top']
 
+min_word_freq = config['data_preprocess']['min_word_freq']
+max_word_len = config['data_preprocess']['max_word_len']
+
 with open(os.path.join(data_dir, in_file), 'rb') as f:
     data = pickle.load(f)
 
@@ -64,6 +67,9 @@ keep_tags = sorted_tag_freq[:num_keep_tags]
 tag_to_index = {tag:i for i, tag in enumerate(keep_tags)}
 index_to_tag = {i:tag for i, tag in enumerate(keep_tags)}
 
+#simple word preprocess to reduce training set vocab size
+word_count = {word:count for word, count in word_count.items() if count >= min_word_freq and len(word) < max_word_len}
+
 #similar to tags, we keep just a portion of the words with most counts
 #however for words the words with most counts are likely to be either
 #punctuation or stop words, which depending on the task might not be
@@ -79,7 +85,6 @@ keep_words = ['_pad', '_start', '_oov'] + keep_words
 
 word_to_index = {word:i for i, word in enumerate(keep_words)}
 index_to_word = {i:word for i, word in enumerate(keep_words)}
-#word_count = {word:count for word, count in word_count.items() if count >= min_word_count and len(word) < max_word_len}
 training_set_words = set(sorted_word_freq)
 
 #delete unneeded variables with a big memory footprint

@@ -2,11 +2,18 @@ dir_name:
   posts: stackoverflow_posts
   data: data
   mappings: mappings
+dataset_size:
+  training_set: 1000
+  validation_set: 200
+  test_set: 1000
 xml_extract:
   region: pt
-  begin_year: 2015
+  begin_year: 2014
   begin_month: 1
-dataset_size:
-  training_set: 10000
-  validation_set: 2000
-  test_set: 10000
+  read_extra: 0.3
+data_preprocess:
+  keep_tags: 20
+  skip_top: 0
+  keep_words: 1000
+  min_word_freq: 5
+  max_word_len: 30
