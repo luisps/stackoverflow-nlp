@@ -15,6 +15,8 @@ training_size = config['dataset_size']['training_set']
 validation_size = config['dataset_size']['validation_set']
 test_size = config['dataset_size']['test_set']
 
+num_keep_tags = config['data_preprocess']['keep_tags']
+
 with open(os.path.join(data_dir, in_file), 'rb') as f:
     data = pickle.load(f)
 
@@ -22,27 +24,75 @@ with open(os.path.join(data_dir, in_file), 'rb') as f:
 #not doing so would mean our data was time dependent, that the test set would
 #always be in the future compared to the training set, similar to a time series dataset
 #while that scenario is indeed realistic it would further complicate our problem unnecessarily
+random.seed(119)
 random.shuffle(data)
+num_posts = len(data)
 
-exit()
-num_post = len(post_body)
 tag_count = defaultdict(int)
 num_tags = defaultdict(int)
 
 #iterate all posts of the training set
+#and accumulate both word and tag frequency
 for post_idx in range(training_size):
 
-    #tags
-    num_tags[len(tags[post_idx])] += 1
+    post_body, tags = data[post_idx]
 
-    for tag in tags[post_idx]:
+    #tags
+    num_tags[len(tags)] += 1
+
+    for tag in tags:
         tag_count[tag] += 1
 
+sorted_tag_freq = sorted(tag_count, key=tag_count.get)
+keep_tags = sorted_tag_freq[-num_keep_tags:]
+
+tag_to_index = {tag:i for i, tag in enumerate(keep_tags)}
+index_to_tag = {i:tag for i, tag in enumerate(keep_tags)}
+
+
+training_set = []
+validation_set = []
+test_set = []
+
+not_done = True
+post_idx = -1
+usable_posts = 0
+
+train_plus_val = training_size + validation_size
+train_plus_val_plus_test = train_plus_val + test_size
+
+while not_done:
+
+    post_idx += 1
+    post_body, tags = data[post_idx]
+
+    new_tags = (tag_to_index[tag] for tag in tags if tag in keep_tags)
+    new_tags = tuple(new_tags)
+
+    #if the resulting post has no tags, then we discard it
+    if len(new_tags) == 0:
+        continue
+
+    if usable_posts < training_size:
+        training_set.append(('', new_tags))
+    elif usable_posts < train_plus_val:
+        validation_set.append(('', new_tags))
+    elif usable_posts < train_plus_val_plus_test:
+        test_set.append(('', new_tags))
+    else:
+        #we're done now, we simply discard the remaining posts
+        not_done = False
+
+    usable_posts += 1
+
+
+
+
+exit()
 
 print('There are in total', num_posts, 'posts')
 print('There are in total', len(tag_count), 'different tags')
 
-z = sorted(tag_count, key=tag_count.get)[::-1]
 
 most_common = 20
 least_common = 20
