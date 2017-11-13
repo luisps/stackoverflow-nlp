@@ -1,3 +1,4 @@
+from lxml import etree
 import pickle
 from collections import defaultdict
 import os
@@ -8,7 +9,93 @@ import random
 import sys
 import nltk
 from tqdm import tqdm
+import re
 import numpy as np
+
+
+
+def fast_iter(posts_file, row_filter_func, row_process_func, use_end_posts, end_posts):
+
+    seen_posts = 0
+    context = etree.iterparse(posts_file, events=('end',), tag='row')
+
+    for event, elem in context:
+
+        if row_filter_func(elem):
+            seen_posts += 1
+            
+            if use_end_posts and seen_posts > end_posts:
+                break
+
+            row_process_func(elem)
+
+        #resource cleaning - contributes to small memory footprint
+        elem.clear()
+        while elem.getprevious() is not None:
+            del elem.getparent()[0]
+    del context
+
+def row_filter(elem):
+
+    #we are only interested in user questions here so
+    #we discard the user answers
+    if elem.attrib['PostTypeId'] != '1':
+        return False
+
+    creation_date = elem.attrib['CreationDate'][:10]
+
+    date_year = int(creation_date[:4])
+    if date_year < begin_year:
+        return False
+
+    date_month = int(creation_date[5:7])
+    if date_month < begin_month:
+        return False
+
+    return True
+    
+def row_process(elem):
+
+    body = elem.attrib['Body']
+    tag_str = elem.attrib['Tags']
+    tags = tuple(tag_re.findall(tag_str))
+
+    data.append((body, tags))
+
+
+with open('config.yml', 'r') as f:
+    config = yaml.load(f)
+
+data_dir = config['dir_name']['data']
+mappings_dir = config['dir_name']['mappings']
+posts_dir = config['dir_name']['posts']
+
+region = config['xml_extract']['region']
+begin_year = config['xml_extract']['begin_year']
+begin_month = config['xml_extract']['begin_month']
+read_extra = config['xml_extract']['read_extra']
+
+training_size = config['dataset_size']['training_set']
+validation_size = config['dataset_size']['validation_set']
+test_size = config['dataset_size']['test_set']
+
+posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
+
+total_posts = training_size + validation_size + test_size
+
+#to do - explain here
+total_posts *= (1. + read_extra)
+total_posts = int(total_posts)
+
+
+use_end_posts = True
+tag_re = re.compile('<(.*?)>')
+data = []
+
+fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
+
+#with open(os.path.join(data_dir, in_file), 'wb') as f:
+#    pickle.dump(data, f)
 
 with open('config.yml', 'r') as f:
     config = yaml.load(f)
@@ -30,8 +117,8 @@ max_word_len = config['data_preprocess']['max_word_len']
 save_word_mapping = config['data_preprocess']['save_word_mapping']
 save_tag_mapping = config['data_preprocess']['save_tag_mapping']
 
-with open(os.path.join(data_dir, in_file), 'rb') as f:
-    data = pickle.load(f)
+#with open(os.path.join(data_dir, in_file), 'rb') as f:
+#    data = pickle.load(f)
 
 #before proceeding we must shuffle the data
 #not doing so would mean our data was time dependent, that the test set would
@@ -157,7 +244,7 @@ while not_done:
     #but is not on keep_words we assign it oov, if the word didn't occur on the training
     #set we discard that word, this behavior is consistent with how keras handles NLP preprocessing
     words = nltk.word_tokenize(post_body)
-    new_words = []
+    new_words = [start_idx]
     for word in words:
         if word in keep_words:
             new_words.append(word_to_index[word])
@@ -202,5 +289,49 @@ while not_done:
 
     else:
         sys.exit('This should not occur')
+
+#Part 4 - dasdad
+
+max_seq_len = 500
+truncating = 'pre'
+padding = 'pre'
+
+datasets = [(training_set, training_size),
+            (validation_set, validation_size),
+            (test_set, test_size)]
+
+final_datasets = []
+
+for d in datasets:
+    dataset = d[0]
+    dataset_size = d[1]
+
+    #comment
+    x = np.zeros((dataset_size, max_seq_len), dtype=np.int32)
+    y = np.zeros((dataset_size, num_keep_tags), dtype=np.float32)
+
+    for post_idx in range(dataset_size):
+
+        #words and tags are lists of word/tag indexes
+        words, tags = dataset[post_idx][0], dataset[post_idx][1]
+
+        if truncating == 'pre':
+            trunc = words[-max_seq_len:]
+        elif truncating == 'post':
+            trunc = words[:max_seq_len]
+        else:
+            raise ValueError('Truncating type "%s" not understood' % truncating)
+
+        if padding == 'pre':
+            x[post_idx, -len(trunc):] = trunc
+        elif padding == 'post':
+            x[post_idx, :len(trunc)] = trunc
+        else:
+            raise ValueError('Padding type "%s" not understood' % padding)
+
+        for tag in tags:
+            y[post_idx, tag] = 1
+
+    final_datasets.append((x, y))
 
 
