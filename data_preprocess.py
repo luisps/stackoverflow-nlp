@@ -7,6 +7,8 @@ import yaml
 import random
 import sys
 import nltk
+from tqdm import tqdm
+import numpy as np
 
 with open('config.yml', 'r') as f:
     config = yaml.load(f)
@@ -43,7 +45,8 @@ num_words = []
 
 #iterate all posts of the training set
 #and accumulate both word and tag frequency
-for post_idx in range(training_size):
+print('Creating word and tag dictionaries for the training set')
+for post_idx in tqdm(range(500)):
 
     post_body, tags = data[post_idx]
 
@@ -59,6 +62,7 @@ for post_idx in range(training_size):
     for tag in tags:
         tag_count[tag] += 1
 
+
 #we keep just the top tags(most frequent) in the training set
 #and discard all other tags from the posts
 sorted_tag_freq = sorted(tag_count, key=tag_count.get)[::-1]
@@ -66,6 +70,11 @@ keep_tags = sorted_tag_freq[:num_keep_tags]
 
 tag_to_index = {tag:i for i, tag in enumerate(keep_tags)}
 index_to_tag = {i:tag for i, tag in enumerate(keep_tags)}
+
+print('Tag statistics')
+print('Unique tags:', len(tag_count))
+print('Number of tags per post:', ', '.join(['%s - %s' % (tag, count) for (tag, count) in sorted(num_tags.items())]))
+print('Most common 10 tags:', ', '.join(sorted_tag_freq[:10]))
 
 #simple word preprocess to reduce training set vocab size
 word_count = {word:count for word, count in word_count.items() if count >= min_word_freq and len(word) < max_word_len}
@@ -87,6 +96,13 @@ word_to_index = {word:i for i, word in enumerate(keep_words)}
 index_to_word = {i:word for i, word in enumerate(keep_words)}
 training_set_words = set(sorted_word_freq)
 
+num_words = np.asarray(num_words)
+print('\nWord statistics')
+print('Unique words:', len(word_count))
+print('Number of words per post(post length): Avg - %0.1f, Std - %0.1f, Max - %d' %
+      (num_words.mean(), num_words.std(), num_words.max()))
+
+exit()
 #delete unneeded variables with a big memory footprint
 #del tag_count, sorted_tag_freq
 #del word_count, sorted_word_freq
