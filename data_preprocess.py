@@ -14,6 +14,7 @@ with open('config.yml', 'r') as f:
     config = yaml.load(f)
 
 data_dir = config['dir_name']['data']
+mappings_dir = config['dir_name']['mappings']
 
 training_size = config['dataset_size']['training_set']
 validation_size = config['dataset_size']['validation_set']
@@ -25,6 +26,9 @@ skip_top = config['data_preprocess']['skip_top']
 
 min_word_freq = config['data_preprocess']['min_word_freq']
 max_word_len = config['data_preprocess']['max_word_len']
+
+save_word_mapping = config['data_preprocess']['save_word_mapping']
+save_tag_mapping = config['data_preprocess']['save_tag_mapping']
 
 with open(os.path.join(data_dir, in_file), 'rb') as f:
     data = pickle.load(f)
@@ -76,6 +80,10 @@ print('Unique tags:', len(tag_count))
 print('Number of tags per post:', ', '.join(['%s - %s' % (tag, count) for (tag, count) in sorted(num_tags.items())]))
 print('Most common 10 tags:', ', '.join(sorted_tag_freq[:10]))
 
+if save_tag_mapping:
+    with open(os.path.join(mappings_dir, in_file[:-4] + '-tag-to-index.json'), 'w') as f:
+        json.dump(tag_to_index, f, indent=2)
+
 #simple word preprocess to reduce training set vocab size
 word_count = {word:count for word, count in word_count.items() if count >= min_word_freq and len(word) < max_word_len}
 
@@ -102,9 +110,15 @@ print('Unique words:', len(word_count))
 print('Number of words per post(post length): Avg - %0.1f, Std - %0.1f, Max - %d' %
       (num_words.mean(), num_words.std(), num_words.max()))
 
-#delete unneeded variables with a big memory footprint
+if save_word_mapping:
+    with open(os.path.join(mappings_dir, in_file[:-4] + '-word-to-index.json'), 'w') as f:
+        json.dump(word_to_index, f, indent=2)
+
+#delete unnecessary variables with a big memory footprint
 #del tag_count, sorted_tag_freq
 #del word_count, sorted_word_freq
+
+
 
 training_set = []
 validation_set = []
@@ -186,54 +200,3 @@ while not_done:
         sys.exit('This should not occur')
 
 
-
-
-"""
-print('There are in total', num_posts, 'posts')
-print('There are in total', len(tag_count), 'different tags')
-
-
-most_common = 20
-least_common = 20
-
-#print('\nThe', most_common, 'most common tags')
-#print(', '.join(z[:most_common]))
-
-#print('\nThe', least_common, 'least common tags')
-#print(u', '.join(z[-least_common:]))
-
-
-keep_tags = z[:total_keep_tags]
-tag_to_index = {tag:i for i, tag in enumerate(keep_tags)}
-save_mapping = True
-
-if save_mapping:
-    with open(os.path.join(mappings_dir, in_file[:-4] + '-tag-to-index.json'), 'w') as f:
-        json.dump(tag_to_index, f, indent=2)
-
-removing_posts_idxs = []
-
-for post_idx in range(num_posts):
-
-    new_tags = [tag_to_index[tag] for tag in tags[post_idx] if tag in keep_tags]
-    new_tags = tuple(new_tags)
-
-    if len(new_tags) == 0:
-        removing_posts_idxs.append(post_idx)
-
-    tags[post_idx] = new_tags
-
-#must remove in reverse order
-for post_idx in removing_posts_idxs[::-1]:
-    del post_body[post_idx]
-    del tags[post_idx]
-    del creation_date[post_idx]
-
-
-data = (post_body, tags)
-out_file = in_file[:-4] + '-tag-processed.pkl'
-
-with open(os.path.join(data_dir, out_file), 'wb') as f:
-    pickle.dump(data, f)
-
-"""
