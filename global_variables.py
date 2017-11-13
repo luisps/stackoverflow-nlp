@@ -5,8 +5,8 @@ mappings_dir = 'mappings'
 
 
 #in_file = 'first-500.pkl'
-#in_file = 'first-5000.pkl'
-in_file = 'first-10000.pkl'
+in_file = 'first-5000.pkl'
+#in_file = 'first-10000.pkl'
 #in_file = 'whole-pt.pkl'
 
 min_word_count = 2
@@ -15,7 +15,7 @@ max_word_len = 30
 total_skip_top = 0
 total_keep_words = 1000
 
-total_keep_tags = 20
+keep_tags = 20
 
 start_char = 1
 #oov_char = 2

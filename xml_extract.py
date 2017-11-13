@@ -61,6 +61,7 @@ posts_dir = config['dir_name']['posts']
 region = config['xml_extract']['region']
 begin_year = config['xml_extract']['begin_year']
 begin_month = config['xml_extract']['begin_month']
+read_extra = config['xml_extract']['read_extra']
 
 training_size = config['dataset_size']['training_set']
 validation_size = config['dataset_size']['validation_set']
@@ -71,7 +72,6 @@ posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
 total_posts = training_size + validation_size + test_size
 
 #to do - explain here
-read_extra = 0.2
 total_posts *= (1. + read_extra)
 total_posts = int(total_posts)
 

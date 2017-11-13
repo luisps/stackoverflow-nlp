@@ -80,10 +80,6 @@ print('Unique tags:', len(tag_count))
 print('Number of tags per post:', ', '.join(['%s - %s' % (tag, count) for (tag, count) in sorted(num_tags.items())]))
 print('Most common 10 tags:', ', '.join(sorted_tag_freq[:10]))
 
-if save_tag_mapping:
-    with open(os.path.join(mappings_dir, in_file[:-4] + '-tag-to-index.json'), 'w') as f:
-        json.dump(tag_to_index, f, indent=2)
-
 #simple word preprocess to reduce training set vocab size
 word_count = {word:count for word, count in word_count.items() if count >= min_word_freq and len(word) < max_word_len}
 
@@ -109,6 +105,14 @@ print('\nWord statistics')
 print('Unique words:', len(word_count))
 print('Number of words per post(post length): Avg - %0.1f, Std - %0.1f, Max - %d' %
       (num_words.mean(), num_words.std(), num_words.max()))
+
+#optionally create mappings dir if it doesn't exist and save word/tag mappings
+if (save_tag_mapping or save_word_mapping) and not os.path.exists(mappings_dir):
+    os.makedirs(mappings_dir)
+
+if save_tag_mapping:
+    with open(os.path.join(mappings_dir, in_file[:-4] + '-tag-to-index.json'), 'w') as f:
+        json.dump(tag_to_index, f, indent=2)
 
 if save_word_mapping:
     with open(os.path.join(mappings_dir, in_file[:-4] + '-word-to-index.json'), 'w') as f:
