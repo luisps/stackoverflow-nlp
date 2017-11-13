@@ -12,7 +12,20 @@ from tqdm import tqdm
 import re
 import numpy as np
 
+"""
+Part 1 - Extract posts from XML file
 
+The file Posts.xml contains all user posts from the beginning of StackOverflow's operation
+until the latest data release for a specific region. Since StackOverflow is a Q&A website, a post
+in this context can be either a user question or answer.
+StackOverflow operates in 5 different regions(or languages) which are English, Portuguese, Spanish,
+Russian and Japanese(often abbreviated by their ISO codes, EN, PT, ES, RU and JA).
+English has by far the biggest community, the file Posts.xml for English is ~60GBs so it can take a
+while to extract posts from that file, for all other regions the file Posts.xml is smaller than 1GB
+and it should run this part relatively fast.
+Posts are read sequentially starting on a specific date(e.g: read 10000 posts starting on January 2015),
+more complex filtering operations could be implemented if need be.
+"""
 
 def fast_iter(posts_file, row_filter_func, row_process_func, use_end_posts, end_posts):
 
@@ -38,12 +51,14 @@ def fast_iter(posts_file, row_filter_func, row_process_func, use_end_posts, end_
 def row_filter(elem):
 
     #we are only interested in user questions here so
-    #we discard the user answers
+    #we discard the answers
     if elem.attrib['PostTypeId'] != '1':
         return False
 
+    #perform post filtering based on the creation date
     creation_date = elem.attrib['CreationDate'][:10]
 
+    #filter out all posts created before date_year and date_month
     date_year = int(creation_date[:4])
     if date_year < begin_year:
         return False
@@ -55,6 +70,7 @@ def row_filter(elem):
     return True
     
 def row_process(elem):
+    global tag_re
 
     body = elem.attrib['Body']
     tag_str = elem.attrib['Tags']
@@ -63,6 +79,7 @@ def row_process(elem):
     data.append((body, tags))
 
 
+#read variables from the configuration file
 with open('config.yml', 'r') as f:
     config = yaml.load(f)
 
@@ -79,33 +96,26 @@ training_size = config['dataset_size']['training_set']
 validation_size = config['dataset_size']['validation_set']
 test_size = config['dataset_size']['test_set']
 
-posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
-
+#Further down on the data pipeline when we apply preprocessing to each post,
+#we may discard posts that don't match certain criteria. Since we don't know
+#beforehand how many posts will be discarded downstream, a simple solution is
+#to read more posts than actually needed and only use the posts we have to
 total_posts = training_size + validation_size + test_size
-
-#to do - explain here
 total_posts *= (1. + read_extra)
 total_posts = int(total_posts)
 
+#compile regex outside the loop for efficiency
+tag_re = re.compile('<(.*?)>')
 
 use_end_posts = True
-tag_re = re.compile('<(.*?)>')
 data = []
+posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
 
 fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
 
-#with open(os.path.join(data_dir, in_file), 'wb') as f:
-#    pickle.dump(data, f)
-
-with open('config.yml', 'r') as f:
-    config = yaml.load(f)
-
-data_dir = config['dir_name']['data']
-mappings_dir = config['dir_name']['mappings']
-
-training_size = config['dataset_size']['training_set']
-validation_size = config['dataset_size']['validation_set']
-test_size = config['dataset_size']['test_set']
+"""
+Part 2
+"""
 
 num_keep_tags = config['data_preprocess']['keep_tags']
 num_keep_words = config['data_preprocess']['keep_words']
