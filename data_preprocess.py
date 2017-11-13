@@ -46,7 +46,7 @@ num_words = []
 #iterate all posts of the training set
 #and accumulate both word and tag frequency
 print('Creating word and tag dictionaries for the training set')
-for post_idx in tqdm(range(500)):
+for post_idx in tqdm(range(training_size)):
 
     post_body, tags = data[post_idx]
 
@@ -102,7 +102,6 @@ print('Unique words:', len(word_count))
 print('Number of words per post(post length): Avg - %0.1f, Std - %0.1f, Max - %d' %
       (num_words.mean(), num_words.std(), num_words.max()))
 
-exit()
 #delete unneeded variables with a big memory footprint
 #del tag_count, sorted_tag_freq
 #del word_count, sorted_word_freq
@@ -113,10 +112,11 @@ test_set = []
 
 not_done = True
 seen_posts = 0
-usable_posts = 0
 
-train_plus_val = training_size + validation_size
-train_plus_val_plus_test = train_plus_val + test_size
+curr_mode = 'training'
+usable_posts = 0
+print('\nCreating training set')
+pbar = tqdm(total=training_size)
 
 while not_done:
 
@@ -126,6 +126,7 @@ while not_done:
     post_body, tags = data[seen_posts]
     seen_posts += 1
 
+    #we convert the tags to indexes and keep just the top tags
     new_tags = [tag_to_index[tag] for tag in tags if tag in keep_tags]
     new_tags = tuple(new_tags)
 
@@ -134,6 +135,9 @@ while not_done:
     if len(new_tags) == 0:
         continue
 
+    #we convert the words to indexes, if the word occured on the training set
+    #but is not on keep_words we assign it oov, if the word didn't occur on the training
+    #set we discard that word, this behavior is consistent with how keras handles NLP preprocessing
     words = nltk.word_tokenize(post_body)
     new_words = []
     for word in words:
@@ -145,19 +149,41 @@ while not_done:
             #ignore these words
             pass
 
-    #new_words = [word_to_index[word] for word in words if word in keep_words]
-
-    if usable_posts < training_size:
-        training_set.append((new_words, new_tags))
-    elif usable_posts < train_plus_val:
-        validation_set.append((new_words, new_tags))
-    elif usable_posts < train_plus_val_plus_test:
-        test_set.append((new_words, new_tags))
-    else:
-        #we're done now, we simply discard the remaining posts
-        not_done = False
-
     usable_posts += 1
+    pbar.update(1)
+
+    if curr_mode == 'training':
+        training_set.append((new_words, new_tags))
+
+        if usable_posts == training_size:
+            curr_mode = 'validation'
+            usable_posts = 0
+
+            pbar.close()
+            print('Creating validation set')
+            pbar = tqdm(total=validation_size)
+
+    elif curr_mode == 'validation':
+        validation_set.append((new_words, new_tags))
+
+        if usable_posts == validation_size:
+            curr_mode = 'test'
+            usable_posts = 0
+
+            pbar.close()
+            print('Creating test set')
+            pbar = tqdm(total=test_size)
+
+    elif curr_mode == 'test':
+        test_set.append((new_words, new_tags))
+
+        if usable_posts == test_size:
+            #we're done now, we simply discard the remaining posts
+            not_done = False
+            pbar.close()
+
+    else:
+        sys.exit('This should not occur')
 
 
 
