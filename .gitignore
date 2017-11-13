@@ -5,3 +5,5 @@ __pycache__
 
 data/
 mappings/
+stackoverflow_posts/*.xml
+stackoverflow_posts/*.7z
