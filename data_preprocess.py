@@ -2,7 +2,6 @@ from lxml import etree
 import pickle
 from collections import defaultdict
 import os
-from global_variables import *
 import json
 import yaml
 import random
@@ -29,6 +28,7 @@ more complex filtering operations could be implemented if need be.
 
 def fast_iter(posts_file, row_filter_func, row_process_func, use_end_posts, end_posts):
 
+    data = []
     seen_posts = 0
     context = etree.iterparse(posts_file, events=('end',), tag='row')
 
@@ -40,13 +40,15 @@ def fast_iter(posts_file, row_filter_func, row_process_func, use_end_posts, end_
             if use_end_posts and seen_posts > end_posts:
                 break
 
-            row_process_func(elem)
+            data.append(row_process_func(elem))
 
         #resource cleaning - contributes to small memory footprint
         elem.clear()
         while elem.getprevious() is not None:
             del elem.getparent()[0]
+
     del context
+    return data
 
 def row_filter(elem):
 
@@ -76,7 +78,7 @@ def row_process(elem):
     tag_str = elem.attrib['Tags']
     tags = tuple(tag_re.findall(tag_str))
 
-    data.append((body, tags))
+    return (body, tags)
 
 
 #read variables from the configuration file
@@ -92,14 +94,15 @@ begin_year = config['xml_extract']['begin_year']
 begin_month = config['xml_extract']['begin_month']
 read_extra = config['xml_extract']['read_extra']
 
-training_size = config['dataset_size']['training_set']
-validation_size = config['dataset_size']['validation_set']
-test_size = config['dataset_size']['test_set']
+dataset_name = config['dataset']['name']
+training_size = config['dataset']['training_size']
+validation_size = config['dataset']['validation_size']
+test_size = config['dataset']['test_size']
 
 #Further down on the data pipeline when we apply preprocessing to each post,
 #we may discard posts that don't match certain criteria. Since we don't know
 #beforehand how many posts will be discarded downstream, a simple solution is
-#to read more posts than actually needed and only use the posts we have to
+#to read more posts than actually needed and only use the posts that we have to
 total_posts = training_size + validation_size + test_size
 total_posts *= (1. + read_extra)
 total_posts = int(total_posts)
@@ -108,13 +111,28 @@ total_posts = int(total_posts)
 tag_re = re.compile('<(.*?)>')
 
 use_end_posts = True
-data = []
 posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
 
-fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
+data = fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
+print('Successfully extracted posts from', posts_file)
+
 
 """
-Part 2
+Part 2 - Map words and tags to indexes
+
+Calculate word and tag frequency for posts in the training set.
+These frequencies will be used to create a vocabulary for words and
+a vocabulary for tags. In order to restrict the problem size we consider
+just subsets for all the tags and all the words. After choosing a vocabulary
+we create mappings to map from word/tag to indexes. These mappings can be
+optionally saved to a file to be analysed.
+Tokenizing a post's text into words is done using NLTK, this is a suboptimal
+solution since it's targeted for natural language and not for programming languages.
+A typical question in StackOverflow mixes natural language and programming languages
+and so ideally we should use a different tokenizer for each.
+Using programming language specific lexical analysers for tokenization should
+be the right way to go, however here we simply go with a simpler approach of using
+NLTK's word tokenizer for tokenizing all post's contents.
 """
 
 num_keep_tags = config['data_preprocess']['keep_tags']
@@ -124,16 +142,14 @@ skip_top = config['data_preprocess']['skip_top']
 min_word_freq = config['data_preprocess']['min_word_freq']
 max_word_len = config['data_preprocess']['max_word_len']
 
-save_word_mapping = config['data_preprocess']['save_word_mapping']
-save_tag_mapping = config['data_preprocess']['save_tag_mapping']
+save_word_mapping = config['mappings']['save_word_mapping']
+save_tag_mapping = config['mappings']['save_tag_mapping']
 
-#with open(os.path.join(data_dir, in_file), 'rb') as f:
-#    data = pickle.load(f)
-
-#before proceeding we must shuffle the data
-#not doing so would mean our data was time dependent, that the test set would
-#always be in the future compared to the training set, similar to a time series dataset
-#while that scenario is indeed realistic it would further complicate our problem unnecessarily
+#The data is currently ordered by creation time, before proceeding with the train/val/test split
+#we must shuffle the data. Failing to do so would mean our data was time dependent,
+#that the test set would always be in the future compared to the training set, similar
+#to a time series dataset. While that scenario is indeed realistic it would further complicate
+#our problem unnecessarily by introducing time dependencies.
 random.seed(119)
 random.shuffle(data)
 num_posts = len(data)
@@ -144,8 +160,7 @@ num_tags = defaultdict(int)
 word_count = defaultdict(int)
 num_words = []
 
-#iterate all posts of the training set
-#and accumulate both word and tag frequency
+#iterate all posts of the training set and accumulate both word and tag frequency
 print('Creating word and tag dictionaries for the training set')
 for post_idx in tqdm(range(training_size)):
 
@@ -180,14 +195,15 @@ print('Most common 10 tags:', ', '.join(sorted_tag_freq[:10]))
 #simple word preprocess to reduce training set vocab size
 word_count = {word:count for word, count in word_count.items() if count >= min_word_freq and len(word) < max_word_len}
 
-#similar to tags, we keep just a portion of the words with most counts
-#however for words the words with most counts are likely to be either
+#Similar to tags, we keep just a portion of the words with most counts.
+#Differently for words, the words with most counts are likely to be either
 #punctuation or stop words, which depending on the task might not be
-#so relevant and so we have an option to skip the top words as well
+#so relevant and so we can skip the top words as well. This behaviour
+#is consistent with the way Keras handles NLP pre-processing.
 sorted_word_freq = sorted(word_count, key=word_count.get)[::-1]
 keep_words = sorted_word_freq[skip_top:num_keep_words]
 
-#add special tokens to word list
+#add special tokens to the word list
 pad_idx = 0
 start_idx = 1
 oov_idx = 2
@@ -208,11 +224,11 @@ if (save_tag_mapping or save_word_mapping) and not os.path.exists(mappings_dir):
     os.makedirs(mappings_dir)
 
 if save_tag_mapping:
-    with open(os.path.join(mappings_dir, in_file[:-4] + '-tag-to-index.json'), 'w') as f:
+    with open(os.path.join(mappings_dir, dataset_name + '-tag-to-index.json'), 'w') as f:
         json.dump(tag_to_index, f, indent=2)
 
 if save_word_mapping:
-    with open(os.path.join(mappings_dir, in_file[:-4] + '-word-to-index.json'), 'w') as f:
+    with open(os.path.join(mappings_dir, dataset_name + '-word-to-index.json'), 'w') as f:
         json.dump(word_to_index, f, indent=2)
 
 #delete unnecessary variables with a big memory footprint
@@ -220,6 +236,10 @@ if save_word_mapping:
 #del word_count, sorted_word_freq
 
 
+"""
+Part 3 - 
+
+"""
 
 training_set = []
 validation_set = []
@@ -241,7 +261,7 @@ while not_done:
     post_body, tags = data[seen_posts]
     seen_posts += 1
 
-    #we convert the tags to indexes and keep just the top tags
+    #convert the tags to indexes and keep just the selected tags
     new_tags = [tag_to_index[tag] for tag in tags if tag in keep_tags]
     new_tags = tuple(new_tags)
 
@@ -250,9 +270,10 @@ while not_done:
     if len(new_tags) == 0:
         continue
 
-    #we convert the words to indexes, if the word occured on the training set
-    #but is not on keep_words we assign it oov, if the word didn't occur on the training
-    #set we discard that word, this behavior is consistent with how keras handles NLP preprocessing
+    #Convert the words to indexes. If the word occured on the training set
+    #but is not on keep_words we assign it oov. If the word didn't occur on the training
+    #set we discard that word. This behavior is consistent with the way keras
+    #handles NLP pre-processing.
     words = nltk.word_tokenize(post_body)
     new_words = [start_idx]
     for word in words:
@@ -299,6 +320,7 @@ while not_done:
 
     else:
         sys.exit('This should not occur')
+
 
 #Part 4 - dasdad
 

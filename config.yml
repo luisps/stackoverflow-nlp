@@ -2,10 +2,11 @@ dir_name:
   posts: stackoverflow_posts
   data: data
   mappings: mappings
-dataset_size:
-  training_set: 2000
-  validation_set: 500
-  test_set: 2000
+dataset:
+  name: small_pt
+  training_size: 2000
+  validation_size: 500
+  test_size: 2000
 xml_extract:
   region: pt
   begin_year: 2015
@@ -17,5 +18,6 @@ data_preprocess:
   keep_words: 2000
   min_word_freq: 5
   max_word_len: 30
+mappings:
   save_word_mapping: True
   save_tag_mapping: True
