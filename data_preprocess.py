@@ -1,5 +1,4 @@
 from lxml import etree
-import pickle
 from collections import defaultdict
 import os
 import json
@@ -10,6 +9,7 @@ import nltk
 from tqdm import tqdm
 import re
 import numpy as np
+import pickle
 
 """
 Part 1 - Extract posts from XML file
@@ -194,6 +194,7 @@ print('\nTag statistics')
 print('Unique tags:', len(tag_count))
 print('Number of tags per post:', ', '.join(['%s - %s' % (tag, count) for (tag, count) in sorted(num_tags.items())]))
 print('Most common 10 tags:', ', '.join(sorted_tag_freq[:10]))
+print('Least common 10 tags:', ', '.join(sorted_tag_freq[-10:]))
 
 #simple word preprocess to reduce training set vocab size
 word_count = {word:count for word, count in word_count.items() if count >= min_word_freq and len(word) < max_word_len}
@@ -221,6 +222,8 @@ print('\nWord statistics')
 print('Unique words:', len(word_count))
 print('Number of words per post(post length): Avg - %0.1f, Std - %0.1f, Max - %d' %
       (num_words.mean(), num_words.std(), num_words.max()))
+print('Most common 10 words:', ', '.join(sorted_word_freq[:10]))
+print('Least common 10 words:', ', '.join(sorted_word_freq[-10:]))
 
 #delete unnecessary variables with a big memory footprint
 del tag_count, sorted_tag_freq
@@ -332,7 +335,7 @@ while not_done:
 
 
 """
-Part 4 - Convert train/val/test sets to matrix format
+Part 4 - Convert train/val/test sets to keras expected format
 
 Convert variable length sequences(each post can have arbitrary length
 which differs from post to post) to a fixed size length sequence.
@@ -340,13 +343,13 @@ In order to convert posts to a fixed size, posts above a threshold are
 truncated and posts below the same threshold are zero padded. Both
 truncation and padding can occur either at the beginning or end of
 sequence. All sequences begin with a start sequence token.
-The train/val/test sets are converted to matrix format which is the
+The train/val/test sets are converted to NumPy matrices which is the
 format expected by Keras. The final dataset is saved to a file.
 """
 
-max_seq_len = config['matrix_format']['max_seq_len']
-truncating = config['matrix_format']['truncating']
-padding = config['matrix_format']['padding']
+max_seq_len = config['keras_format']['max_seq_len']
+truncating = config['keras_format']['truncating']
+padding = config['keras_format']['padding']
 
 datasets = [(training_set, training_size),
             (validation_set, validation_size),

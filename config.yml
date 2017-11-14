@@ -21,7 +21,7 @@ vocabularies:
 mappings:
   save_word_mapping: True
   save_tag_mapping: True
-matrix_format:
+keras_format:
   max_seq_len: 500
   truncating: pre
   padding: pre
