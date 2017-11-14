@@ -2,6 +2,7 @@ dir_name:
   posts: stackoverflow_posts
   data: data
   mappings: mappings
+  models: saved_models
 dataset:
   name: small_pt
   training_size: 2000

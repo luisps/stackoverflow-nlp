@@ -1,5 +1,5 @@
 from keras.models import Sequential
-from keras.layers import Dense, Embedding, LSTM, Bidirectional
+from keras.layers import Embedding, LSTM, Bidirectional, Dense
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras import backend as K
 import tensorflow as tf
@@ -28,6 +28,7 @@ with open('config.yml', 'r') as f:
     config = yaml.load(f)
 
 data_dir = config['dir_name']['data']
+models_dir = config['dir_name']['models']
 dataset_name = config['dataset']['name']
 
 embedding_dim = config['model']['embedding_dim']
@@ -44,6 +45,7 @@ epochs = config['model']['epochs']
 num_keep_tags = config['vocabularies']['keep_tags']
 num_keep_words = config['vocabularies']['keep_words']
 skip_top = config['vocabularies']['skip_top']
+max_seq_len = config['keras_format']['max_seq_len']
 
 word_vocab_size = num_keep_words - skip_top + 3
 tag_vocab_size = num_keep_tags
@@ -55,35 +57,45 @@ with open(os.path.join(data_dir, dataset_name + '.pkl'), 'rb') as f:
 (x_train, y_train), (x_val, y_val), (x_test, y_test) = data
 del data
 
-exit()
+#build the model
 model = Sequential()
-#defining input_length - would change if we go with a bucket like solution to have different input lengths based on sentence size
-model.add(Embedding(vocab_size, embedding_dim, input_length=max_seq_len))
+model.add(Embedding(word_vocab_size, embedding_dim, input_length=max_seq_len))
 
 for _ in range(num_layers-1):
-    model.add(Bidirectional(LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout, return_sequences=True)))
+    lstm_layer = LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout, return_sequences=True)
+    lstm_layer = Bidirectional(lstm_layer) if bidirectional else lstm_layer
+    model.add(lstm_layer)
 
-model.add(Bidirectional(LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout)))
+lstm_layer = LSTM(hidden_dim, dropout=input_dropout, recurrent_dropout=recurrent_dropout)
+lstm_layer = Bidirectional(lstm_layer) if bidirectional else lstm_layer
+model.add(lstm_layer)
 
-model.add(Dense(total_keep_tags, activation='sigmoid'))
+model.add(Dense(tag_vocab_size, activation='sigmoid'))
 
 model.compile(optimizer='adam',
               loss=weighted_binary_crossentropy,
               metrics=['accuracy'])
 
-#model.summary()
+model.summary()
 
-file_path = 'model_layers-1_hidden-512.h5'
-checkpoint = ModelCheckpoint(file_path, monitor='val_acc', verbose=0, save_best_only=True, save_weights_only=False)
+#create models dir if it doesn't exist
+if not os.path.exists(models_dir):
+    os.makedirs(models_dir)
+
+#callbacks
+bidirectional_str = '_bidirectional' if bidirectional else ''
+model_path = os.path.join(models_dir, dataset_name + '_embedding-%d_hidden-%d_layers-%d%s.h5' % (embedding_dim, hidden_dim, num_layers, bidirectional_str))
+
+checkpoint = ModelCheckpoint(model_path, monitor='val_acc', verbose=0, save_best_only=True, save_weights_only=False)
 #early_stopping = EarlyStopping(monitor='val_loss', verbose=1, patience=6)
 
-#model = load_model(file_path)
-
+"""
 print('Started training')
-history = model.fit(x, y,
+history = model.fit(x_train, y_train,
                     batch_size=batch_size,
                     epochs=epochs,
-                    validation_split=0.2,
-                    verbose=2#,
-#                    callbacks=[checkpoint]
+                    verbose=2,
+                    callbacks=[checkpoint],
+                    validation_data=(x_val, y_val)
                    )
+"""
