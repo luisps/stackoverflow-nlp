@@ -6,7 +6,7 @@ import tensorflow as tf
 
 import os
 import pickle
-from global_variables import *
+import yaml
 
 
 def weighted_binary_crossentropy(y_true, y_pred):
@@ -23,21 +23,39 @@ def tf_weighted_binary_crossentropy(target, output, from_logits=False, pos_weigh
     return tf.nn.weighted_cross_entropy_with_logits(targets=target,
                                        logits=output, pos_weight=pos_weight)
 
-embedding_dim = 512
-hidden_dim = 512
-num_layers = 1
-input_dropout = 0.2
-recurrent_dropout = 0.2
 
-batch_size = 128
-epochs = 100
+with open('config.yml', 'r') as f:
+    config = yaml.load(f)
 
-with open(os.path.join(data_dir, in_file[:-4] + '-ready.pkl'), 'rb') as f:
+data_dir = config['dir_name']['data']
+dataset_name = config['dataset']['name']
+
+embedding_dim = config['model']['embedding_dim']
+hidden_dim = config['model']['hidden_dim']
+num_layers = config['model']['num_layers']
+bidirectional = config['model']['bidirectional']
+
+input_dropout = config['model']['input_dropout']
+recurrent_dropout = config['model']['recurrent_dropout']
+
+batch_size = config['model']['batch_size']
+epochs = config['model']['epochs']
+
+num_keep_tags = config['vocabularies']['keep_tags']
+num_keep_words = config['vocabularies']['keep_words']
+skip_top = config['vocabularies']['skip_top']
+
+word_vocab_size = num_keep_words - skip_top + 3
+tag_vocab_size = num_keep_tags
+
+#load posts dataset
+with open(os.path.join(data_dir, dataset_name + '.pkl'), 'rb') as f:
     data = pickle.load(f)
 
-x, y = data
+(x_train, y_train), (x_val, y_val), (x_test, y_test) = data
 del data
 
+exit()
 model = Sequential()
 #defining input_length - would change if we go with a bucket like solution to have different input lengths based on sentence size
 model.add(Embedding(vocab_size, embedding_dim, input_length=max_seq_len))

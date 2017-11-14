@@ -25,3 +25,12 @@ keras_format:
   max_seq_len: 500
   truncating: pre
   padding: pre
+model:
+  embedding_dim: 512
+  hidden_dim: 512
+  num_layers: 1
+  bidirectional: False
+  input_dropout: 0.2
+  recurrent_dropout: 0.2
+  batch_size: 128
+  epochs: 100
