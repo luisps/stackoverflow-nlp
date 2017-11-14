@@ -52,8 +52,8 @@ def fast_iter(posts_file, row_filter_func, row_process_func, use_end_posts, end_
 
 def row_filter(elem):
 
-    #we are only interested in user questions here so
-    #we discard the answers
+    #only user questions have tags and so 
+    #for our purposes we discard the answers
     if elem.attrib['PostTypeId'] != '1':
         return False
 
@@ -112,20 +112,23 @@ tag_re = re.compile('<(.*?)>')
 
 use_end_posts = True
 posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
+if not os.path.isfile(posts_file):
+    print('The file', posts_file, "doesn't exist. Download it first by running the script on", posts_dir, 'directory.')
+    sys.exit('Exiting')
 
 data = fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
 print('Successfully extracted posts from', posts_file)
 
 
 """
-Part 2 - Map words and tags to indexes
+Part 2 - Create word and tag vocabularies and mappings
 
 Calculate word and tag frequency for posts in the training set.
 These frequencies will be used to create a vocabulary for words and
 a vocabulary for tags. In order to restrict the problem size we consider
 just subsets for all the tags and all the words. After choosing a vocabulary
 we create mappings to map from word/tag to indexes. These mappings can be
-optionally saved to a file to be analysed.
+optionally saved to a file to be analysed or used for online inference.
 Tokenizing a post's text into words is done using NLTK, this is a suboptimal
 solution since it's targeted for natural language and not for programming languages.
 A typical question in StackOverflow mixes natural language and programming languages
@@ -135,12 +138,12 @@ be the right way to go, however here we simply go with a simpler approach of usi
 NLTK's word tokenizer for tokenizing all post's contents.
 """
 
-num_keep_tags = config['data_preprocess']['keep_tags']
-num_keep_words = config['data_preprocess']['keep_words']
-skip_top = config['data_preprocess']['skip_top']
+num_keep_tags = config['vocabularies']['keep_tags']
+num_keep_words = config['vocabularies']['keep_words']
+skip_top = config['vocabularies']['skip_top']
 
-min_word_freq = config['data_preprocess']['min_word_freq']
-max_word_len = config['data_preprocess']['max_word_len']
+min_word_freq = config['vocabularies']['min_word_freq']
+max_word_len = config['vocabularies']['max_word_len']
 
 save_word_mapping = config['mappings']['save_word_mapping']
 save_tag_mapping = config['mappings']['save_tag_mapping']
@@ -187,7 +190,7 @@ keep_tags = sorted_tag_freq[:num_keep_tags]
 tag_to_index = {tag:i for i, tag in enumerate(keep_tags)}
 index_to_tag = {i:tag for i, tag in enumerate(keep_tags)}
 
-print('Tag statistics')
+print('\nTag statistics')
 print('Unique tags:', len(tag_count))
 print('Number of tags per post:', ', '.join(['%s - %s' % (tag, count) for (tag, count) in sorted(num_tags.items())]))
 print('Most common 10 tags:', ', '.join(sorted_tag_freq[:10]))
@@ -219,26 +222,30 @@ print('Unique words:', len(word_count))
 print('Number of words per post(post length): Avg - %0.1f, Std - %0.1f, Max - %d' %
       (num_words.mean(), num_words.std(), num_words.max()))
 
+#delete unnecessary variables with a big memory footprint
+del tag_count, sorted_tag_freq
+del word_count, sorted_word_freq
+
 #optionally create mappings dir if it doesn't exist and save word/tag mappings
 if (save_tag_mapping or save_word_mapping) and not os.path.exists(mappings_dir):
     os.makedirs(mappings_dir)
 
 if save_tag_mapping:
-    with open(os.path.join(mappings_dir, dataset_name + '-tag-to-index.json'), 'w') as f:
+    with open(os.path.join(mappings_dir, dataset_name + '_tag_to_index.json'), 'w') as f:
         json.dump(tag_to_index, f, indent=2)
 
 if save_word_mapping:
-    with open(os.path.join(mappings_dir, dataset_name + '-word-to-index.json'), 'w') as f:
+    with open(os.path.join(mappings_dir, dataset_name + '_word_to_index.json'), 'w') as f:
         json.dump(word_to_index, f, indent=2)
-
-#delete unnecessary variables with a big memory footprint
-#del tag_count, sorted_tag_freq
-#del word_count, sorted_word_freq
 
 
 """
-Part 3 - 
+Part 3 - Create train/val/test sets
 
+Posts are read sequentially and assigned either to train, val or test sets. Tags inside the tag vocabulary
+are mapped to tag indexes, otherwise they are dropped. Words inside the word vocabulary are also mapped to
+word indexes, otherwise we first check if that word ocurred on the training set and if so we assign it the
+out of vocabulary(OOV) token, if the word isn't on the word vocabulary nor training set we simply drop it.
 """
 
 training_set = []
@@ -256,7 +263,9 @@ pbar = tqdm(total=training_size)
 while not_done:
 
     if seen_posts == num_posts:
-        sys.exit("We have seen all posts but still couldn't fill up the training, validation or test sets, this is because too many 'non usable' posts got discarded. Try increasing the read_extra variable. Exiting ...")
+        pbar.close()
+        print("\nWe have seen all the posts but still couldn't fill up the training, validation or test sets, this is because too many 'non usable' posts got discarded. Try increasing the read_extra variable.")
+        sys.exit('Exiting')
 
     post_body, tags = data[seen_posts]
     seen_posts += 1
@@ -322,23 +331,33 @@ while not_done:
         sys.exit('This should not occur')
 
 
-#Part 4 - dasdad
+"""
+Part 4 - Convert train/val/test sets to matrix format
 
-max_seq_len = 500
-truncating = 'pre'
-padding = 'pre'
+Convert variable length sequences(each post can have arbitrary length
+which differs from post to post) to a fixed size length sequence.
+In order to convert posts to a fixed size, posts above a threshold are
+truncated and posts below the same threshold are zero padded. Both
+truncation and padding can occur either at the beginning or end of
+sequence. All sequences begin with a start sequence token.
+The train/val/test sets are converted to matrix format which is the
+format expected by Keras. The final dataset is saved to a file.
+"""
+
+max_seq_len = config['matrix_format']['max_seq_len']
+truncating = config['matrix_format']['truncating']
+padding = config['matrix_format']['padding']
 
 datasets = [(training_set, training_size),
             (validation_set, validation_size),
             (test_set, test_size)]
 
-final_datasets = []
+final_dataset = []
 
 for d in datasets:
     dataset = d[0]
     dataset_size = d[1]
 
-    #comment
     x = np.zeros((dataset_size, max_seq_len), dtype=np.int32)
     y = np.zeros((dataset_size, num_keep_tags), dtype=np.float32)
 
@@ -352,18 +371,25 @@ for d in datasets:
         elif truncating == 'post':
             trunc = words[:max_seq_len]
         else:
-            raise ValueError('Truncating type "%s" not understood' % truncating)
+            sys.exit('Truncating type "%s" not understood' % truncating)
 
         if padding == 'pre':
             x[post_idx, -len(trunc):] = trunc
         elif padding == 'post':
             x[post_idx, :len(trunc)] = trunc
         else:
-            raise ValueError('Padding type "%s" not understood' % padding)
+            sys.exit('Padding type "%s" not understood' % padding)
 
         for tag in tags:
             y[post_idx, tag] = 1
 
-    final_datasets.append((x, y))
+    final_dataset.append((x, y))
 
+#create data dir if it doesn't exist and save the dataset to a file
+if not os.path.exists(data_dir):
+    os.makedirs(data_dir)
 
+with open(os.path.join(data_dir, dataset_name + '.pkl'), 'wb') as f:
+    pickle.dump(final_dataset, f)
+
+print('Done')

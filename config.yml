@@ -11,8 +11,8 @@ xml_extract:
   region: pt
   begin_year: 2015
   begin_month: 1
-  read_extra: 0.3
-data_preprocess:
+  read_extra: 0.35
+vocabularies:
   keep_tags: 20
   skip_top: 0
   keep_words: 2000
@@ -21,3 +21,7 @@ data_preprocess:
 mappings:
   save_word_mapping: True
   save_tag_mapping: True
+matrix_format:
+  max_seq_len: 500
+  truncating: pre
+  padding: pre
