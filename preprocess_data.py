@@ -72,11 +72,9 @@ def row_filter(elem):
     return True
     
 def row_process(elem):
-    global tag_re
 
     body = elem.attrib['Body']
-    tag_str = elem.attrib['Tags']
-    tags = tuple(tag_re.findall(tag_str))
+    tags = elem.attrib['Tags']
 
     return (body, tags)
 
@@ -107,9 +105,6 @@ total_posts = training_size + validation_size + test_size
 total_posts *= (1. + read_extra)
 total_posts = int(total_posts)
 
-#compile regex outside the loop for efficiency
-tag_re = re.compile('<(.*?)>')
-
 use_end_posts = True
 posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
 if not os.path.isfile(posts_file):
@@ -118,7 +113,6 @@ if not os.path.isfile(posts_file):
 
 data = fast_iter(posts_file, row_filter, row_process, use_end_posts, total_posts)
 print('Successfully extracted posts from', posts_file)
-
 
 """
 Part 2 - Create word and tag vocabularies and mappings
@@ -163,24 +157,28 @@ num_tags = defaultdict(int)
 word_count = defaultdict(int)
 num_words = []
 
+#compile regex outside the loop for efficiency
+tag_re = re.compile('<(.*?)>')
+
 #iterate all posts of the training set and accumulate both word and tag frequency
 print('Creating word and tag dictionaries for the training set')
 for post_idx in tqdm(range(training_size)):
 
-    post_body, tags = data[post_idx]
+    post_body, tag_str = data[post_idx]
 
     #word frequency
     words = nltk.word_tokenize(post_body)
     num_words.append(len(words))
+
     for word in words:
         word_count[word] += 1
 
     #tag frequency
+    tags = tuple(tag_re.findall(tag_str))
     num_tags[len(tags)] += 1
 
     for tag in tags:
         tag_count[tag] += 1
-
 
 #we keep just the top tags(most frequent) in the training set
 #and discard all other tags from the posts
@@ -270,10 +268,11 @@ while not_done:
         print("\nWe have seen all the posts but still couldn't fill up the training, validation or test sets, this is because too many 'non usable' posts got discarded. Try increasing the read_extra variable.")
         sys.exit('Exiting')
 
-    post_body, tags = data[seen_posts]
+    post_body, tag_str = data[seen_posts]
     seen_posts += 1
 
     #convert the tags to indexes and keep just the selected tags
+    tags = tuple(tag_re.findall(tag_str))
     new_tags = [tag_to_index[tag] for tag in tags if tag in keep_tags]
     new_tags = tuple(new_tags)
 

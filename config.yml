@@ -4,10 +4,10 @@ dir_name:
   mappings: mappings
   models: saved_models
 dataset:
-  name: small_pt
-  training_size: 2000
-  validation_size: 500
-  test_size: 2000
+  name: medium_pt
+  training_size: 20000
+  validation_size: 10000
+  test_size: 10000
 xml_extract:
   region: pt
   begin_year: 2015
