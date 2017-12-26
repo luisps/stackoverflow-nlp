@@ -1,3 +1,4 @@
+import keras
 from keras.models import Sequential
 from keras.layers import Embedding, LSTM, Bidirectional, Dense
 from keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -7,7 +8,35 @@ import tensorflow as tf
 import os
 import pickle
 import yaml
+from matplotlib import pyplot as plt
 
+class PlotLosses(keras.callbacks.Callback):
+
+    def on_train_begin(self, logs={}):
+        self.i = 0
+        self.x = []
+        self.losses = []
+        self.val_losses = []
+
+        #self.fig = plt.figure()
+        #plt.ion()
+
+        self.logs = []
+
+    def on_epoch_end(self, epoch, logs={}):
+
+        self.logs.append(logs)
+        self.x.append(self.i)
+        self.losses.append(logs.get('loss'))
+        self.val_losses.append(logs.get('val_loss'))
+        self.i += 1
+
+        with open('loss.pkl', 'wb') as f:
+            pickle.dump((self.x, self.losses, self.val_losses), f)
+
+        #plt.plot(self.x, self.losses, label="loss")
+        #plt.plot(self.x, self.val_losses, label="val_loss")
+        #plt.legend()
 
 def weighted_binary_crossentropy(y_true, y_pred):
     return K.mean(tf_weighted_binary_crossentropy(y_true, y_pred), axis=-1)
@@ -88,14 +117,14 @@ model_path = os.path.join(models_dir, dataset_name + '_embedding-%d_hidden-%d_la
 
 checkpoint = ModelCheckpoint(model_path, monitor='val_acc', verbose=0, save_best_only=True, save_weights_only=False)
 #early_stopping = EarlyStopping(monitor='val_loss', verbose=1, patience=6)
+        
+plot_losses = PlotLosses()
 
-"""
 print('Started training')
 history = model.fit(x_train, y_train,
                     batch_size=batch_size,
                     epochs=epochs,
                     verbose=2,
-                    callbacks=[checkpoint],
+                    callbacks=[checkpoint, plot_losses],
                     validation_data=(x_val, y_val)
                    )
-"""
