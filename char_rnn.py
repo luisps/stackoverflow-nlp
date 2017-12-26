@@ -109,7 +109,7 @@ max_len = config['charRNNmodel']['max_len']
 step = config['charRNNmodel']['step']
 batch_size = config['charRNNmodel']['batch_size']
 
-charRNN = CharRNN(titles_text, max_len, step, batch_size)
+charRNN = CharRNN(titles_text[:500], max_len, step, batch_size)
 gen = charRNN.generator()
 
 
@@ -138,15 +138,14 @@ for _ in range(num_layers-1):
 inference_model.add(TimeDistributed(Dense(charRNN.num_chars, activation='softmax')))
 inference_model.compile(loss='categorical_crossentropy', optimizer='Adam')
 
-#load saved models and train on them if they exist
-if resume_training:
-    if os.path.exists(model_file):
-        model.load_weights(model_file)
+#load saved models if they exist and train on them
+if resume_training and os.path.exists(model_file):
+    model.load_weights(model_file)
 
-    if os.path.exists(losses_file):
-        with open(losses_file, 'rb') as f:
-            losses = pickle.load(f)
-            initial_epoch = len(losses) + 1
+if resume_training and os.path.exists(losses_file):
+    with open(losses_file, 'rb') as f:
+        losses = pickle.load(f)
+        initial_epoch = len(losses) + 1
 else:
     losses = []
     initial_epoch = 1
@@ -155,8 +154,8 @@ else:
 for epoch in range(initial_epoch, initial_epoch + epochs):
 
     startEpoch = time.time()
-    #history = model.fit_generator(gen, steps_per_epoch=charRNN.steps_per_epoch, epochs=1, verbose=2)
-    history = model.fit_generator(gen, steps_per_epoch=2, epochs=1, verbose=0)
+    history = model.fit_generator(gen, steps_per_epoch=charRNN.steps_per_epoch, epochs=1, verbose=0)
+    #history = model.fit_generator(gen, steps_per_epoch=2, epochs=1, verbose=0)
     model.save_weights(model_file)
 
     #save losses to file
@@ -190,7 +189,8 @@ for epoch in range(initial_epoch, initial_epoch + epochs):
             currChar.fill(0)
             currChar[0, 0, nextCharIdx] = 1
 
-        print('Sampled text')
+        print('\nSampled text at epoch %d' % epoch)
         print(text)
+        print()
 
 

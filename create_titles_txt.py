@@ -34,7 +34,7 @@ if not os.path.exists(data_dir):
     os.makedirs(data_dir)
 
 titles_file = os.path.join(data_dir, 'titles_' + region + '.txt')
-with open(titles_file, 'w') as f:
+with open(titles_file, 'w', encoding='utf-8') as f:
     f.write(titles_text)
 
 conn.close()
