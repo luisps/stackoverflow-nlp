@@ -18,7 +18,8 @@ if not os.path.isfile(losses_file):
 with open(losses_file, 'rb') as f:
     losses = pickle.load(f)
 
-plt.plot(losses)
+X = range(1, len(losses)+1)
+plt.plot(X, losses)
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
 
