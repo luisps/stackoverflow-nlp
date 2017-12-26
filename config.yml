@@ -36,13 +36,14 @@ model:
   batch_size: 128
   epochs: 100
 charRNNmodel:
-  hidden_dim: 64
+  mode: test
+  hidden_dim: 256
   num_layers: 1
   epochs: 100
-  sample_epochs: 10
+  sample_epochs: 5
   resume_training: True
-  input_dropout: 0.0
-  recurrent_dropout: 0.0
-  max_len: 64
+  input_dropout: 0.1
+  recurrent_dropout: 0.1
+  max_len: 100
   step: 5
-  batch_size: 128
+  batch_size: 256

@@ -96,6 +96,7 @@ if not os.path.exists(models_dir):
 model_file = os.path.join(models_dir, 'char_rnn_' + region + '.h5')
 losses_file = os.path.join(models_dir, 'char_rnn_' + region + '.loss')
 
+mode = config['charRNNmodel']['mode']
 hidden_dim = config['charRNNmodel']['hidden_dim']
 num_layers = config['charRNNmodel']['num_layers']
 epochs = config['charRNNmodel']['epochs']
@@ -109,7 +110,7 @@ max_len = config['charRNNmodel']['max_len']
 step = config['charRNNmodel']['step']
 batch_size = config['charRNNmodel']['batch_size']
 
-charRNN = CharRNN(titles_text[:500], max_len, step, batch_size)
+charRNN = CharRNN(titles_text, max_len, step, batch_size)
 gen = charRNN.generator()
 
 
@@ -138,59 +139,101 @@ for _ in range(num_layers-1):
 inference_model.add(TimeDistributed(Dense(charRNN.num_chars, activation='softmax')))
 inference_model.compile(loss='categorical_crossentropy', optimizer='Adam')
 
-#load saved models if they exist and train on them
-if resume_training and os.path.exists(model_file):
-    model.load_weights(model_file)
+if mode == 'train':
+    #load saved models if they exist and train on them
+    if resume_training and os.path.exists(model_file):
+        model.load_weights(model_file)
 
-if resume_training and os.path.exists(losses_file):
-    with open(losses_file, 'rb') as f:
-        losses = pickle.load(f)
-        initial_epoch = len(losses) + 1
-else:
-    losses = []
-    initial_epoch = 1
+    if resume_training and os.path.exists(losses_file):
+        with open(losses_file, 'rb') as f:
+            losses = pickle.load(f)
+            initial_epoch = len(losses) + 1
+    else:
+        losses = []
+        initial_epoch = 1
 
 
-for epoch in range(initial_epoch, initial_epoch + epochs):
+    for epoch in range(initial_epoch, initial_epoch + epochs):
 
-    startEpoch = time.time()
-    history = model.fit_generator(gen, steps_per_epoch=charRNN.steps_per_epoch, epochs=1, verbose=0)
-    #history = model.fit_generator(gen, steps_per_epoch=2, epochs=1, verbose=0)
-    model.save_weights(model_file)
+        startEpoch = time.time()
+        history = model.fit_generator(gen, steps_per_epoch=charRNN.steps_per_epoch, epochs=1, verbose=0)
+        #history = model.fit_generator(gen, steps_per_epoch=2, epochs=1, verbose=0)
+        model.save_weights(model_file)
 
-    #save losses to file
-    curr_loss = history.history['loss'][0]
-    losses.append(curr_loss)
-    with open(losses_file, 'wb') as f:
-        pickle.dump(losses, f)
+        #save losses to file
+        curr_loss = history.history['loss'][0]
+        losses.append(curr_loss)
+        with open(losses_file, 'wb') as f:
+            pickle.dump(losses, f)
 
-    endEpoch = time.time()
-    elapsedSecs = round(endEpoch - startEpoch)
-    print('%ds - Epoch %d - Loss %.4f' % (elapsedSecs, epoch, curr_loss))
+        endEpoch = time.time()
+        elapsedSecs = round(endEpoch - startEpoch)
+        print('%ds - Epoch %d - Loss %.4f' % (elapsedSecs, epoch, curr_loss))
 
-    if epoch % sample_epochs == 0:
+        if epoch % sample_epochs == 0:
 
+            inference_model.load_weights(model_file)
+            inference_model.reset_states()
+
+            currChar = np.zeros((1, 1, charRNN.num_chars))
+            currChar[0, 0, charRNN.char_to_idx['S']] = 1
+            text = ''
+            text += 'S'
+
+            for i in range(150):
+
+                #retrieve a probability distribution over the next char in the sequence
+                #and sample from that distribution
+                nextCharProbs = inference_model.predict(currChar)
+
+                #softmax output is float32, must convert to float64 first as expected by np.random.multinomial
+                nextCharProbs = np.asarray(nextCharProbs).astype('float64') 
+                nextCharProbs = nextCharProbs / nextCharProbs.sum()  # Re-normalize for float64 to make exactly 1.0.
+
+                nextCharIdx = np.random.multinomial(1, nextCharProbs.squeeze(), 1).argmax()
+                text += charRNN.idx_to_char[nextCharIdx]
+
+                currChar.fill(0)
+                currChar[0, 0, nextCharIdx] = 1
+
+            print('\nSampled text at epoch %d' % epoch)
+            print(text)
+            print()
+
+elif mode == 'test':
+    
+    if os.path.exists(model_file):
         inference_model.load_weights(model_file)
-        inference_model.reset_states()
+    else:
+        print('Model does not exist')
+        sys.exit('Exiting')
 
-        currChar = np.zeros((1, 1, charRNN.num_chars))
-        currChar[0, 0, charRNN.char_to_idx['S']] = 1
-        text = ''
-        text += 'S'
+    inference_model.reset_states()
 
-        for i in range(100):
+    currChar = np.zeros((1, 1, charRNN.num_chars))
+    currChar[0, 0, charRNN.char_to_idx['S']] = 1
+    text = ''
+    text += 'S'
 
-            #retrieve a probability distribution over the next char in the sequence
-            #and sample from that distribution
-            nextCharProbs = inference_model.predict(currChar)
-            nextCharIdx = np.random.multinomial(1, nextCharProbs.squeeze(), 1).argmax()
-            text += charRNN.idx_to_char[nextCharIdx]
+    for i in range(400):
 
-            currChar.fill(0)
-            currChar[0, 0, nextCharIdx] = 1
+        #retrieve a probability distribution over the next char in the sequence
+        #and sample from that distribution
+        nextCharProbs = inference_model.predict(currChar)
 
-        print('\nSampled text at epoch %d' % epoch)
-        print(text)
-        print()
+        #softmax output is float32, must convert to float64 first as expected by np.random.multinomial
+        nextCharProbs = np.asarray(nextCharProbs).astype('float64') 
+        nextCharProbs = nextCharProbs / nextCharProbs.sum()  # Re-normalize for float64 to make exactly 1.0.
 
+        nextCharIdx = np.random.multinomial(1, nextCharProbs.squeeze(), 1).argmax()
+        text += charRNN.idx_to_char[nextCharIdx]
 
+        currChar.fill(0)
+        currChar[0, 0, nextCharIdx] = 1
+
+    print('\nSampled text')
+    print(text)
+    print()
+
+else:
+    sys.exit('This should not occur')
