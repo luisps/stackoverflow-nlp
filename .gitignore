@@ -5,5 +5,8 @@ __pycache__
 
 data/
 mappings/
-stackoverflow_posts/*.xml
-stackoverflow_posts/*.7z
+saved_models/
+
+posts/*.xml
+posts/*.7z
+posts/*.db
