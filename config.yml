@@ -1,27 +1,27 @@
 dir_name:
-  posts: stackoverflow_posts
+  posts: posts
   data: data
   mappings: mappings
   models: saved_models
 dataset:
-  name: medium_pt
-  training_size: 20000
-  validation_size: 10000
-  test_size: 10000
+  name: small_pt
+  training_size: 500
+  validation_size: 0
+  test_size: 0
 xml_extract:
-  region: pt
-  begin_year: 2015
+  region: es
+  begin_year: 2014
   begin_month: 1
   read_extra: 0.35
 vocabularies:
-  keep_tags: 20
+  keep_tags: 50
   skip_top: 0
-  keep_words: 2000
+  keep_words: 500
   min_word_freq: 5
   max_word_len: 30
 mappings:
-  save_word_mapping: True
-  save_tag_mapping: True
+  save_word_mapping: False
+  save_tag_mapping: False
 keras_format:
   max_seq_len: 500
   truncating: pre
@@ -35,3 +35,14 @@ model:
   recurrent_dropout: 0.2
   batch_size: 128
   epochs: 100
+charRNNmodel:
+  hidden_dim: 64
+  num_layers: 1
+  epochs: 3
+  sample_epochs: 2
+  resume_training: True
+  input_dropout: 0.1
+  recurrent_dropout: 0.1
+  max_len: 64
+  step: 5
+  batch_size: 128
