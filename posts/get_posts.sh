@@ -1,5 +1,11 @@
 #!/bin/bash
 
+#making sure p7zip is installed - needed for uncompression
+if ! hash 7za 2>/dev/null; then
+	echo "Unable to unzip. Please install p7zip-full package"
+	exit
+fi
+
 #Selecting region
 if [ -z $1 ]; then
 	region="pt"

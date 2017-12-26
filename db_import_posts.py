@@ -116,7 +116,7 @@ conn.commit()
 #download XML file if not available locally
 if not os.path.isfile(posts_file):
     print('The file', posts_file, "doesn't exist. Downloading it now to", posts_dir, 'directory.')
-    subprocess.call(['./get_data.sh', region], cwd=posts_dir)
+    subprocess.call(['./get_posts.sh', region], cwd=posts_dir)
 
 posts = read_posts(posts_file, row_filter, row_process)
 
