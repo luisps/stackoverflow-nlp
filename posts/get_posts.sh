@@ -20,8 +20,8 @@ fi
 
 #compressed file name
 if [ $region == 'en' ]; then
-	zipped_file="stackoverflow.com-Posts.7z"
-	echo "Large file warning: Compressed Posts.xml for en is ~10GB. Uncompressed is ~55GB."
+	zipped_file="stackoverflow.com-PostHistory.7z"
+	echo "Large file warning: Compressed PostHistory.xml for EN is ~20GB."
 else
 	zipped_file="$region.stackoverflow.com.7z"
 fi
@@ -33,9 +33,9 @@ if [ ! -f $zipped_file ]; then
 fi
 
 echo "Uncompressing $zipped_file"
-7za -y x $zipped_file Posts.xml > /dev/null
+7za -y x $zipped_file PostHistory.xml > /dev/null
 
-mv Posts.xml $out_file
+mv PostHistory.xml $out_file
 rm $zipped_file
 
 echo "$out_file is ready"
