@@ -10,6 +10,9 @@ from math import ceil
 import time
 import pickle
 
+"""
+Code adapted from https://github.com/asturkmani/Keras-char-rnn
+"""
 class CharRNN:
 
     def __init__(self, corpus, max_len, step, batch_size):
@@ -62,16 +65,47 @@ class CharRNN:
         return X, Y
 
     def generator(self):
-        """comment here"""
+        """retrieve training batches"""
 
-        #fetch a batch of data, apply vectorization to it and use that
-        #batch to train, applying vectorization for each batch is much more
-        #memory friendly than vectorizing the entire data set at once
+        #fetch a batch of sentences, apply vectorization to it and yield that batch
+        #to be used for training, applying vectorization for each batch is much
+        #more memory friendly than vectorizing the entire data set at once
         while True:
             for j in range(0, self.num_sent, self.batch_size):
                 batch_sentences = self.sentences[j:j + self.batch_size]
                 X, Y = self.vectorize(batch_sentences)
                 yield (X, Y)
+
+
+def sample_chars(inference_model, charRNN, sample_size, initial_char='S'):
+
+    inference_model.reset_states()
+
+    text = ''
+    currChar = np.zeros((1, 1, charRNN.num_chars))
+
+    currCharIdx = charRNN.char_to_idx[initial_char]
+    currChar[0, 0, currCharIdx] = 1
+    text += initial_char
+
+    for _ in range(sample_size):
+
+        #retrieve a probability distribution over the next char in the sequence
+        nextCharProbs = inference_model.predict(currChar)
+
+        #softmax output is float32, must convert to float64 first as expected by np.random.multinomial
+        nextCharProbs = np.asarray(nextCharProbs).astype('float64') 
+        nextCharProbs = nextCharProbs / nextCharProbs.sum()
+
+        #sample a char from the distribution
+        nextCharIdx = np.random.multinomial(1, nextCharProbs.squeeze(), 1).argmax()
+        text += charRNN.idx_to_char[nextCharIdx]
+
+        currChar[0, 0, currCharIdx] = 0
+        currChar[0, 0, nextCharIdx] = 1
+        currCharIdx = nextCharIdx
+
+    return text
 
 
 with open('config.yml', 'r') as f:
@@ -106,6 +140,7 @@ resume_training = config['charRNNmodel']['resume_training']
 input_dropout = config['model']['input_dropout']
 recurrent_dropout = config['model']['recurrent_dropout']
 
+sample_size = config['charRNNmodel']['sample_size']
 max_len = config['charRNNmodel']['max_len']
 step = config['charRNNmodel']['step']
 batch_size = config['charRNNmodel']['batch_size']
@@ -126,7 +161,7 @@ model.add(TimeDistributed(Dense(charRNN.num_chars, activation='softmax')))
 model.compile(loss='categorical_crossentropy', optimizer='Adam')
 
 #build inference model
-#same model as training model, the number of parameters should match for both models
+#same model as training model and so the number of parameters should match for both models
 #differently from the training model however this model is stateful
 #and only receives 1 sample at a time with time window 1
 inference_model = Sequential()
@@ -140,6 +175,7 @@ inference_model.add(TimeDistributed(Dense(charRNN.num_chars, activation='softmax
 inference_model.compile(loss='categorical_crossentropy', optimizer='Adam')
 
 if mode == 'train':
+
     #load saved models if they exist and train on them
     if resume_training and os.path.exists(model_file):
         model.load_weights(model_file)
@@ -157,7 +193,6 @@ if mode == 'train':
 
         startEpoch = time.time()
         history = model.fit_generator(gen, steps_per_epoch=charRNN.steps_per_epoch, epochs=1, verbose=0)
-        #history = model.fit_generator(gen, steps_per_epoch=2, epochs=1, verbose=0)
         model.save_weights(model_file)
 
         #save losses to file
@@ -173,28 +208,7 @@ if mode == 'train':
         if epoch % sample_epochs == 0:
 
             inference_model.load_weights(model_file)
-            inference_model.reset_states()
-
-            currChar = np.zeros((1, 1, charRNN.num_chars))
-            currChar[0, 0, charRNN.char_to_idx['S']] = 1
-            text = ''
-            text += 'S'
-
-            for i in range(150):
-
-                #retrieve a probability distribution over the next char in the sequence
-                #and sample from that distribution
-                nextCharProbs = inference_model.predict(currChar)
-
-                #softmax output is float32, must convert to float64 first as expected by np.random.multinomial
-                nextCharProbs = np.asarray(nextCharProbs).astype('float64') 
-                nextCharProbs = nextCharProbs / nextCharProbs.sum()  # Re-normalize for float64 to make exactly 1.0.
-
-                nextCharIdx = np.random.multinomial(1, nextCharProbs.squeeze(), 1).argmax()
-                text += charRNN.idx_to_char[nextCharIdx]
-
-                currChar.fill(0)
-                currChar[0, 0, nextCharIdx] = 1
+            text = sample_chars(inference_model, charRNN, sample_size)
 
             print('\nSampled text at epoch %d' % epoch)
             print(text)
@@ -208,32 +222,11 @@ elif mode == 'test':
         print('Model does not exist')
         sys.exit('Exiting')
 
-    inference_model.reset_states()
-
-    currChar = np.zeros((1, 1, charRNN.num_chars))
-    currChar[0, 0, charRNN.char_to_idx['S']] = 1
-    text = ''
-    text += 'S'
-
-    for i in range(400):
-
-        #retrieve a probability distribution over the next char in the sequence
-        #and sample from that distribution
-        nextCharProbs = inference_model.predict(currChar)
-
-        #softmax output is float32, must convert to float64 first as expected by np.random.multinomial
-        nextCharProbs = np.asarray(nextCharProbs).astype('float64') 
-        nextCharProbs = nextCharProbs / nextCharProbs.sum()  # Re-normalize for float64 to make exactly 1.0.
-
-        nextCharIdx = np.random.multinomial(1, nextCharProbs.squeeze(), 1).argmax()
-        text += charRNN.idx_to_char[nextCharIdx]
-
-        currChar.fill(0)
-        currChar[0, 0, nextCharIdx] = 1
+    text = sample_chars(inference_model, charRNN, sample_size)
 
     print('\nSampled text')
     print(text)
     print()
 
 else:
-    sys.exit('This should not occur')
+    sys.exit('Mode %s not understood' % mode)
