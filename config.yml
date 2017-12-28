@@ -3,6 +3,8 @@ dir_name:
   data: data
   mappings: mappings
   models: saved_models
+  samples: samples
+  images: plots
 dataset:
   name: small_pt
   training_size: 500
@@ -39,11 +41,11 @@ charRNNmodel:
   mode: test
   hidden_dim: 256
   num_layers: 1
-  epochs: 100
-  sample_epochs: 5
+  epochs: 10
   resume_training: True
   input_dropout: 0.1
   recurrent_dropout: 0.1
+  sample_size: 500
   max_len: 100
   step: 5
   batch_size: 256

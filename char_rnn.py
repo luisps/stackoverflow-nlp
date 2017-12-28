@@ -78,6 +78,12 @@ class CharRNN:
 
 
 def sample_chars(inference_model, charRNN, sample_size, initial_char='S'):
+    """
+        sample an amount of sample_size characters starting with the
+        character initial_char, at each timestep the inference_model
+        is used to predict a probability distribution over the next
+        character conditioned on all the characters sampled before
+    """
 
     inference_model.reset_states()
 
@@ -113,6 +119,7 @@ with open('config.yml', 'r') as f:
 
 data_dir = config['dir_name']['data']
 models_dir = config['dir_name']['models']
+samples_dir = config['dir_name']['samples']
 region = config['xml_extract']['region']
 
 titles_file = os.path.join(data_dir, 'titles_' + region + '.txt')
@@ -126,6 +133,10 @@ with open(titles_file, 'r') as f:
 #create models dir if it doesn't exist
 if not os.path.exists(models_dir):
     os.makedirs(models_dir)
+
+#create samples dir if it doesn't exist
+if not os.path.exists(samples_dir):
+    os.makedirs(samples_dir)
 
 model_file = os.path.join(models_dir, 'char_rnn_' + region + '.h5')
 losses_file = os.path.join(models_dir, 'char_rnn_' + region + '.loss')
@@ -148,7 +159,6 @@ batch_size = config['charRNNmodel']['batch_size']
 charRNN = CharRNN(titles_text, max_len, step, batch_size)
 gen = charRNN.generator()
 
-
 #build training model
 model = Sequential()
 
@@ -161,7 +171,8 @@ model.add(TimeDistributed(Dense(charRNN.num_chars, activation='softmax')))
 model.compile(loss='categorical_crossentropy', optimizer='Adam')
 
 #build inference model
-#same model as training model and so the number of parameters should match for both models
+#the inference model is essentialy the same model as the training model
+#and so the number of parameters should match for both models
 #differently from the training model however this model is stateful
 #and only receives 1 sample at a time with time window 1
 inference_model = Sequential()
@@ -195,7 +206,7 @@ if mode == 'train':
         history = model.fit_generator(gen, steps_per_epoch=charRNN.steps_per_epoch, epochs=1, verbose=0)
         model.save_weights(model_file)
 
-        #save losses to file
+        #save losses to a file
         curr_loss = history.history['loss'][0]
         losses.append(curr_loss)
         with open(losses_file, 'wb') as f:
@@ -205,14 +216,15 @@ if mode == 'train':
         elapsedSecs = round(endEpoch - startEpoch)
         print('%ds - Epoch %d - Loss %.4f' % (elapsedSecs, epoch, curr_loss))
 
-        if epoch % sample_epochs == 0:
+        #sample characters and save them to a file
+        inference_model.load_weights(model_file)
+        sampled_text = sample_chars(inference_model, charRNN, sample_size)
 
-            inference_model.load_weights(model_file)
-            text = sample_chars(inference_model, charRNN, sample_size)
+        sample_file = os.path.join(samples_dir, 'titles_' + region + '_epoch_' + epoch + '.txt')
+        with open(sample_file, 'w') as f:
+            f.write(sampled_text)
 
-            print('\nSampled text at epoch %d' % epoch)
-            print(text)
-            print()
+        print ('Created', sample_file)
 
 elif mode == 'test':
     
@@ -222,7 +234,7 @@ elif mode == 'test':
         print('Model does not exist')
         sys.exit('Exiting')
 
-    text = sample_chars(inference_model, charRNN, sample_size)
+    sampled_text = sample_chars(inference_model, charRNN, sample_size)
 
     print('\nSampled text')
     print(text)
