@@ -6,6 +6,8 @@ __pycache__
 data/
 mappings/
 saved_models/
+plots/
+samples/
 
 posts/*.xml
 posts/*.7z

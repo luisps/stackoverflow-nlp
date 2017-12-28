@@ -1,0 +1,51 @@
+dir_name:
+  posts: posts
+  data: data
+  mappings: mappings
+  models: saved_models
+  samples: samples
+  images: plots
+dataset:
+  name: small_pt
+  training_size: 500
+  validation_size: 0
+  test_size: 0
+xml_extract:
+  region: es
+  begin_year: 2014
+  begin_month: 1
+  read_extra: 0.35
+vocabularies:
+  keep_tags: 50
+  skip_top: 0
+  keep_words: 500
+  min_word_freq: 5
+  max_word_len: 30
+mappings:
+  save_word_mapping: False
+  save_tag_mapping: False
+keras_format:
+  max_seq_len: 500
+  truncating: pre
+  padding: pre
+model:
+  embedding_dim: 512
+  hidden_dim: 512
+  num_layers: 1
+  bidirectional: False
+  input_dropout: 0.2
+  recurrent_dropout: 0.2
+  batch_size: 128
+  epochs: 100
+charRNNmodel:
+  mode: test
+  hidden_dim: 256
+  num_layers: 1
+  epochs: 10
+  resume_training: True
+  input_dropout: 0.1
+  recurrent_dropout: 0.1
+  sample_size: 500
+  max_len: 100
+  step: 5
+  batch_size: 256
