@@ -110,8 +110,8 @@ else:
 #change cwd to the directory that holds the script
 os.chdir(sys.path[0])
 
-posts_file = 'Posts_' + region + '.xml'
-db_file = 'Posts_' + region + '.db'
+posts_file = 'Posts_{}.xml'.format(region)
+db_file = 'Posts_{}.db'.format(region)
 
 #create connection
 conn = sqlite3.connect(db_file)

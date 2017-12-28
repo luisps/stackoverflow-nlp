@@ -11,10 +11,10 @@ region = config['region']
 data_dir = config['dir_name']['data']
 posts_dir = config['dir_name']['posts']
 
-db_file = os.path.join(posts_dir, 'Posts_' + region + '.db')
+db_file = os.path.join(posts_dir, 'Posts_{}.db'.format(region))
 
 if not os.path.isfile(db_file):
-    sys.exit(db_file + " doesn't exist")
+    sys.exit('SQLite database {} does not exist'.format(db_file))
 
 #create data dir if it doesn't exist
 if not os.path.exists(data_dir):
@@ -33,7 +33,7 @@ for row in select_iter:
 #remove extra \n at the end
 titles_text = titles_text[:-2]
 
-titles_file = os.path.join(data_dir, 'titles_' + region + '.txt')
+titles_file = os.path.join(data_dir, 'titles_{}.txt'.format(region))
 with open(titles_file, 'w', encoding='utf-8') as f:
     f.write(titles_text)
 
