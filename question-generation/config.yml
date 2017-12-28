@@ -4,7 +4,7 @@ dir_name:
   data: data
   models: saved-models
   samples: samples
-  images: plots
+  images: images
 charRNNmodel:
   mode: test
   file_type: titles
