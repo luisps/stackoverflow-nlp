@@ -117,18 +117,10 @@ def sample_chars(inference_model, charRNN, sample_size, initial_char='S'):
 with open('config.yml', 'r') as f:
     config = yaml.load(f)
 
+region = config['region']
 data_dir = config['dir_name']['data']
 models_dir = config['dir_name']['models']
 samples_dir = config['dir_name']['samples']
-region = config['xml_extract']['region']
-
-titles_file = os.path.join(data_dir, 'titles_' + region + '.txt')
-if not os.path.isfile(titles_file):
-    print(titles_file, "doesn't exist")
-    sys.exit('Exiting')
-
-with open(titles_file, 'r') as f:
-    titles_text = f.read()
 
 #create models dir if it doesn't exist
 if not os.path.exists(models_dir):
@@ -156,7 +148,17 @@ max_len = config['charRNNmodel']['max_len']
 step = config['charRNNmodel']['step']
 batch_size = config['charRNNmodel']['batch_size']
 
-charRNN = CharRNN(titles_text, max_len, step, batch_size)
+#read text file - used as training data for the CharRNN model
+text_file = os.path.join(data_dir, 'titles_' + region + '.txt')
+if not os.path.isfile(text_file):
+    sys.exit(text_file, "doesn't exist")
+
+with open(text_file, 'r') as f:
+    corpus = f.read()
+
+#create instance of CharRNN with the chosen parameters
+#the generator is passed when training to Keras model.fit_generator
+charRNN = CharRNN(corpus, max_len, step, batch_size)
 gen = charRNN.generator()
 
 #build training model
@@ -221,7 +223,7 @@ if mode == 'train':
         sampled_text = sample_chars(inference_model, charRNN, sample_size)
 
         sample_file = os.path.join(samples_dir, 'titles_' + region + '_epoch_' + epoch + '.txt')
-        with open(sample_file, 'w') as f:
+        with open(sample_file, 'w', encoding='utf-8') as f:
             f.write(sampled_text)
 
         print ('Created', sample_file)
