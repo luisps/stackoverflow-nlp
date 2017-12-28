@@ -79,39 +79,39 @@ class CharRNN:
 
 def sample_chars(inference_model, charRNN, sample_size, initial_char='S'):
     """
-        sample an amount of sample_size characters starting with the
-        character initial_char, at each timestep the inference_model
-        is used to predict a probability distribution over the next
-        character conditioned on all the characters sampled before
+    sample an amount of sample_size characters starting with the
+    character initial_char, at each timestep the inference_model
+    is used to predict a probability distribution over the next
+    character conditioned on all the characters sampled before
     """
 
     inference_model.reset_states()
 
-    text = ''
-    currChar = np.zeros((1, 1, charRNN.num_chars))
+    sampled_text = ''
+    curr_char = np.zeros((1, 1, charRNN.num_chars))
 
-    currCharIdx = charRNN.char_to_idx[initial_char]
-    currChar[0, 0, currCharIdx] = 1
-    text += initial_char
+    curr_char_idx = charRNN.char_to_idx[initial_char]
+    curr_char[0, 0, curr_char_idx] = 1
+    sampled_text += initial_char
 
     for _ in range(sample_size):
 
         #retrieve a probability distribution over the next char in the sequence
-        nextCharProbs = inference_model.predict(currChar)
+        next_char_probs = inference_model.predict(curr_char)
 
         #softmax output is float32, must convert to float64 first as expected by np.random.multinomial
-        nextCharProbs = np.asarray(nextCharProbs).astype('float64') 
-        nextCharProbs = nextCharProbs / nextCharProbs.sum()
+        next_char_probs = np.asarray(next_char_probs).astype('float64') 
+        next_char_probs = next_char_probs / next_char_probs.sum()
 
         #sample a char from the distribution
-        nextCharIdx = np.random.multinomial(1, nextCharProbs.squeeze(), 1).argmax()
-        text += charRNN.idx_to_char[nextCharIdx]
+        next_char_idx = np.random.multinomial(1, next_char_probs.squeeze(), 1).argmax()
+        sampled_text += charRNN.idx_to_char[next_char_idx]
 
-        currChar[0, 0, currCharIdx] = 0
-        currChar[0, 0, nextCharIdx] = 1
-        currCharIdx = nextCharIdx
+        curr_char[0, 0, curr_char_idx] = 0
+        curr_char[0, 0, next_char_idx] = 1
+        curr_char_idx = next_char_idx
 
-    return text
+    return sampled_text
 
 
 with open('config.yml', 'r') as f:
@@ -122,22 +122,14 @@ data_dir = config['dir_name']['data']
 models_dir = config['dir_name']['models']
 samples_dir = config['dir_name']['samples']
 
-#create models dir if it doesn't exist
-if not os.path.exists(models_dir):
-    os.makedirs(models_dir)
-
-#create samples dir if it doesn't exist
-if not os.path.exists(samples_dir):
-    os.makedirs(samples_dir)
-
 mode = config['charRNNmodel']['mode']
 file_type = config['charRNNmodel']['file_type']
 
 hidden_dim = config['charRNNmodel']['hidden_dim']
 num_layers = config['charRNNmodel']['num_layers']
 
-input_dropout = config['model']['input_dropout']
-recurrent_dropout = config['model']['recurrent_dropout']
+input_dropout = config['charRNNmodel']['input_dropout']
+recurrent_dropout = config['charRNNmodel']['recurrent_dropout']
 
 epochs = config['charRNNmodel']['epochs']
 resume_training = config['charRNNmodel']['resume_training']
@@ -150,10 +142,18 @@ batch_size = config['charRNNmodel']['batch_size']
 model_file = os.path.join(models_dir, 'char_rnn_{}_{}.h5'.format(file_type, region))
 losses_file = os.path.join(models_dir, 'char_rnn_{}_{}.loss'.format(file_type, region))
 
+#create models dir if it doesn't exist
+if not os.path.exists(models_dir):
+    os.makedirs(models_dir)
+
+#create samples dir if it doesn't exist
+if not os.path.exists(samples_dir):
+    os.makedirs(samples_dir)
+
 #read text file - used as training data for the CharRNN model
 text_file = os.path.join(data_dir, '{}_{}.txt'.format(file_type, region))
 if not os.path.isfile(text_file):
-    sys.exit(text_file, "doesn't exist")
+    sys.exit('Text file {} does not exist'.format(text_file))
 
 with open(text_file, 'r') as f:
     corpus = f.read()
@@ -232,17 +232,14 @@ if mode == 'train':
 
 elif mode == 'test':
     
-    if os.path.exists(model_file):
-        inference_model.load_weights(model_file)
-    else:
-        print('Model does not exist')
-        sys.exit('Exiting')
+    if not os.path.exists(model_file):
+        sys.exit('Model weights {} do not exist'.format(model_file))
 
+    inference_model.load_weights(model_file)
     sampled_text = sample_chars(inference_model, charRNN, sample_size)
 
     print('\nSampled text')
-    print(text)
-    print()
+    print(sampled_text)
 
 else:
-    sys.exit('Mode %s not understood' % mode)
+    sys.exit('Mode {} not understood'.format(mode))

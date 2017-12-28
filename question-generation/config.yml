@@ -2,7 +2,7 @@ region: es
 dir_name:
   posts: ../posts
   data: data
-  models: saved_models
+  models: saved-models
   samples: samples
   images: plots
 charRNNmodel:
@@ -14,7 +14,7 @@ charRNNmodel:
   recurrent_dropout: 0.1
   epochs: 10
   resume_training: True
-  sample_size: 500
+  sample_size: 5000
   max_len: 100
   step: 5
   batch_size: 256
