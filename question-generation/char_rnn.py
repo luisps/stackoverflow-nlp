@@ -130,26 +130,28 @@ if not os.path.exists(models_dir):
 if not os.path.exists(samples_dir):
     os.makedirs(samples_dir)
 
-model_file = os.path.join(models_dir, 'char_rnn_' + region + '.h5')
-losses_file = os.path.join(models_dir, 'char_rnn_' + region + '.loss')
-
 mode = config['charRNNmodel']['mode']
+file_type = config['charRNNmodel']['file_type']
+
 hidden_dim = config['charRNNmodel']['hidden_dim']
 num_layers = config['charRNNmodel']['num_layers']
-epochs = config['charRNNmodel']['epochs']
-sample_epochs = config['charRNNmodel']['sample_epochs']
-resume_training = config['charRNNmodel']['resume_training']
 
 input_dropout = config['model']['input_dropout']
 recurrent_dropout = config['model']['recurrent_dropout']
 
+epochs = config['charRNNmodel']['epochs']
+resume_training = config['charRNNmodel']['resume_training']
 sample_size = config['charRNNmodel']['sample_size']
+
 max_len = config['charRNNmodel']['max_len']
 step = config['charRNNmodel']['step']
 batch_size = config['charRNNmodel']['batch_size']
 
+model_file = os.path.join(models_dir, 'char_rnn_{}_{}.h5'.format(file_type, region))
+losses_file = os.path.join(models_dir, 'char_rnn_{}_{}.loss'.format(file_type, region))
+
 #read text file - used as training data for the CharRNN model
-text_file = os.path.join(data_dir, 'titles_' + region + '.txt')
+text_file = os.path.join(data_dir, '{}_{}.txt'.format(file_type, region))
 if not os.path.isfile(text_file):
     sys.exit(text_file, "doesn't exist")
 
@@ -222,7 +224,7 @@ if mode == 'train':
         inference_model.load_weights(model_file)
         sampled_text = sample_chars(inference_model, charRNN, sample_size)
 
-        sample_file = os.path.join(samples_dir, 'titles_' + region + '_epoch_' + epoch + '.txt')
+        sample_file = os.path.join(samples_dir, '{}_{}_epoch_{}.txt'.format(file_type, region, epoch))
         with open(sample_file, 'w', encoding='utf-8') as f:
             f.write(sampled_text)
 
