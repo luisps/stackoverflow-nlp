@@ -27,7 +27,7 @@ fi
 #compressed file name
 if [ $region == 'en' ]; then
 	zipped_file="stackoverflow.com-PostHistory.7z"
-	echo "Large file warning: Compressed PostHistory.xml for EN is ~20GB."
+	echo "Large file warning: Compressed PostHistory.xml for EN is ~20GB. Uncompressed is ~100GB"
 else
 	zipped_file="$region.stackoverflow.com.7z"
 fi
