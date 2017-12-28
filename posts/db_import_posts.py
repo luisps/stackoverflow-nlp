@@ -1,9 +1,7 @@
 from lxml import etree
 import sqlite3
 import os
-import yaml
 import subprocess
-from pprint import pprint
 import sys
 
 def recreate_table(cur):
@@ -96,15 +94,24 @@ def is_tags(postTypeId):
     return postTypeId == 3 or postTypeId == 6 or postTypeId == 9
 
 
-#read variables from the configuration file
-with open('config.yml', 'r') as f:
-    config = yaml.load(f)
+available_regions = ['en', 'pt', 'es', 'ru', 'ja']
 
-posts_dir = config['dir_name']['posts']
-region = config['xml_extract']['region']
+#Selecting region
+if len(sys.argv) < 2:
+    region = 'pt'
+    print ('No region passed as argument. Using default region: ' + region)
+else:
+    region = sys.argv[1]
 
-posts_file = os.path.join(posts_dir, 'Posts_' + region + '.xml')
-db_file = os.path.join(posts_dir, 'Posts_' + region + '.db')
+    if region not in available_regions:
+        sys.exit('Region must be one of the available regions: ' + ', '.join(available_regions))
+
+
+#change cwd to the directory that holds the script
+os.chdir(sys.path[0])
+
+posts_file = 'Posts_' + region + '.xml'
+db_file = 'Posts_' + region + '.db'
 
 #create connection
 conn = sqlite3.connect(db_file)
@@ -115,8 +122,8 @@ conn.commit()
 
 #download XML file if not available locally
 if not os.path.isfile(posts_file):
-    print('The file', posts_file, "doesn't exist. Downloading it now to", posts_dir, 'directory.')
-    subprocess.call(['./get_posts.sh', region], cwd=posts_dir)
+    print('The file', posts_file, "doesn't exist. Downloading it now to posts directory.")
+    subprocess.call(['./get_posts.sh', region])
 
 posts = read_posts(posts_file, row_filter, row_process)
 
