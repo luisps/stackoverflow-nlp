@@ -81,6 +81,45 @@ class CharRNN:
                 yield (X, Y)
 
 
+class LossHistory:
+
+    def __init__(self, history_file, plot_file, epoch_slices, load_from_file):
+        self.history_file = history_file
+        self.plot_file = plot_file
+        self.epoch_slices = epoch_slices
+
+        if load_from_file:
+            with open(self.history_file, 'rb') as f:
+                self.x, self.loss = pickle.load(f)
+
+        else:
+            self.x, self.loss = [], []
+
+    def update(self, curr_epoch, curr_slice, curr_loss):
+        curr_x = curr_epoch + curr_slice / self.epoch_slices
+
+        self.x.append(curr_x)
+        self.loss.append(curr_loss)
+
+        #save loss history to file
+        with open(self.history_file, 'wb') as f:
+            pickle.dump((self.x, self.loss), f)
+
+        self.plot()
+
+    def plot(self):
+        if len(self.loss) < 2:
+            return
+
+        plt.plot(self.x, self.loss)
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+
+        #save loss plot to file
+        plt.savefig(self.plot_file)
+        plt.close()
+
+
 def sample_chars(inference_model, charRNN, sample_size, initial_char='S'):
     """
     sample an amount of sample_size characters starting with the
@@ -138,7 +177,9 @@ recurrent_dropout = config['charRNNmodel']['recurrent_dropout']
 epochs = config['charRNNmodel']['epochs']
 epoch_slices = config['charRNNmodel']['epoch_slices']
 resume_training = config['charRNNmodel']['resume_training']
-sample_size = config['charRNNmodel']['sample_size']
+
+train_sample_size = config['charRNNmodel']['train_sample_size']
+test_sample_size = config['charRNNmodel']['test_sample_size']
 
 max_len = config['charRNNmodel']['max_len']
 step = config['charRNNmodel']['step']
@@ -198,45 +239,6 @@ for _ in range(num_layers-1):
 inference_model.add(TimeDistributed(Dense(charRNN.num_chars, activation='softmax')))
 inference_model.compile(loss='categorical_crossentropy', optimizer='Adam')
 
-class LossHistory:
-
-    def __init__(self, history_file, plot_file, epoch_slices, load_from_file):
-        self.history_file = history_file
-        self.plot_file = plot_file
-        self.epoch_slices = epoch_slices
-
-        if load_from_file:
-            with open(self.history_file, 'rb') as f:
-                self.x, self.loss = pickle.load(f)
-
-        else:
-            self.x = []
-            self.loss = []
-
-    def update(self, curr_epoch, curr_slice, curr_loss):
-        curr_x = curr_epoch + curr_slice / self.epoch_slices
-
-        self.x.append(curr_x)
-        self.loss.append(curr_loss)
-
-        #save loss history to file
-        with open(self.history_file, 'wb') as f:
-            pickle.dump((self.x, self.loss), f)
-
-        self.plot()
-
-    def plot(self):
-        if len(self.loss) < 2:
-            return
-
-        plt.plot(self.x, self.loss)
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss')
-
-        #save loss plot to file
-        plt.savefig(self.plot_file)
-        plt.close()
-
 
 if mode == 'train':
 
@@ -246,10 +248,14 @@ if mode == 'train':
 
     if resume_training and os.path.isfile(loss_history_file):
         loss = LossHistory(loss_history_file, loss_plot_file, epoch_slices, True)
+        sample_f = open(sample_file, 'a', encoding='utf-8')
+
         initial_epoch = (len(loss.loss) // epoch_slices) + 1
         initial_slice = (len(loss.loss) % epoch_slices) + 1
     else:
         loss = LossHistory(loss_history_file, loss_plot_file, epoch_slices, False)
+        sample_f = open(sample_file, 'w', encoding='utf-8')
+
         initial_epoch = 1
         initial_slice = 1
 
@@ -257,15 +263,15 @@ if mode == 'train':
     remaining_steps = charRNN.steps_per_epoch % epoch_slices
 
     print('Started training')
-    for curr_epoch in range(initial_epoch, initial_epoch + epochs):
+    for curr_epoch in range(initial_epoch, epochs+1):
 
         start_epoch = time.time()
 
-        for curr_slice in range(initial_slice, epoch_slices):
+        for curr_slice in range(initial_slice, epoch_slices+1):
 
             start_slice = time.time()
-            #history = model.fit_generator(gen, steps_per_epoch=steps_per_slice, epochs=1, verbose=0)
-            history = model.fit_generator(gen, steps_per_epoch=1, epochs=1, verbose=0)
+            history = model.fit_generator(gen, steps_per_epoch=steps_per_slice, epochs=1, verbose=0)
+            #history = model.fit_generator(gen, steps_per_epoch=1, epochs=1, verbose=0)
             model.save_weights(model_file)
 
             curr_loss = history.history['loss'][0]
@@ -276,20 +282,24 @@ if mode == 'train':
             print('{}s - Epoch {} - {}/{} - Loss {:.4f}'.format(elapsed_secs, curr_epoch, curr_slice, epoch_slices, curr_loss))
 
             #sample characters and save them to a file
-            """
             inference_model.load_weights(model_file)
-            sampled_text = sample_chars(inference_model, charRNN, sample_size)
+            sampled_text = sample_chars(inference_model, charRNN, train_sample_size)
 
-            sample_file = os.path.join(samples_dir, '{}_{}_epoch_{}.txt'.format(file_type, region, epoch))
-            with open(sample_file, 'w', encoding='utf-8') as f:
-                f.write(sampled_text)
+            sample_f.write('Epoch {} - {}/{}\n'.format(curr_epoch, curr_slice, epoch_slices))
+            sample_f.write(sampled_text)
+            sample_f.write('\n\n')
+            sample_f.flush()
 
-            print ('Created', sample_file)
-            """
+        if remaining_steps != 0:
+            model.fit_generator(gen, steps_per_epoch=remaining_steps, epochs=1, verbose=0)
 
+        initial_slice = 1
         end_epoch = time.time()
         elapsed_secs = round(end_epoch - start_epoch)
         print('{}s - Epoch {}'.format(elapsed_secs, curr_epoch))
+
+    sample_f.close()
+    print('Finished training')
 
 elif mode == 'test':
     
@@ -297,7 +307,7 @@ elif mode == 'test':
         sys.exit('Model weights {} do not exist'.format(model_file))
 
     inference_model.load_weights(model_file)
-    sampled_text = sample_chars(inference_model, charRNN, sample_size)
+    sampled_text = sample_chars(inference_model, charRNN, test_sample_size)
 
     print('\nSampled text')
     print(sampled_text)

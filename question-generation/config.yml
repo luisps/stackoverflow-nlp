@@ -15,7 +15,8 @@ charRNNmodel:
   epochs: 10
   epoch_slices: 10
   resume_training: True
-  sample_size: 5000
+  train_sample_size: 10
+  test_sample_size: 1000
   max_len: 100
   step: 5
   batch_size: 256
