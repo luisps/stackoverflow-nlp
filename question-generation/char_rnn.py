@@ -10,6 +10,10 @@ from math import ceil
 import time
 import pickle
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 """
 Code adapted from https://github.com/asturkmani/Keras-char-rnn
 """
@@ -132,6 +136,7 @@ input_dropout = config['charRNNmodel']['input_dropout']
 recurrent_dropout = config['charRNNmodel']['recurrent_dropout']
 
 epochs = config['charRNNmodel']['epochs']
+epoch_slices = config['charRNNmodel']['epoch_slices']
 resume_training = config['charRNNmodel']['resume_training']
 sample_size = config['charRNNmodel']['sample_size']
 
@@ -140,7 +145,12 @@ step = config['charRNNmodel']['step']
 batch_size = config['charRNNmodel']['batch_size']
 
 model_file = os.path.join(models_dir, 'char_rnn_{}_{}.h5'.format(file_type, region))
-losses_file = os.path.join(models_dir, 'char_rnn_{}_{}.loss'.format(file_type, region))
+
+loss_history_file = os.path.join(models_dir, 'char_rnn_{}_{}.loss'.format(file_type, region))
+loss_plot_file = os.path.join(models_dir, 'char_rnn_{}_{}.png'.format(file_type, region))
+
+text_file = os.path.join(data_dir, '{}_{}.txt'.format(file_type, region))
+sample_file = os.path.join(samples_dir, '{}_{}.txt'.format(file_type, region))
 
 #create models dir if it doesn't exist
 if not os.path.exists(models_dir):
@@ -151,7 +161,6 @@ if not os.path.exists(samples_dir):
     os.makedirs(samples_dir)
 
 #read text file - used as training data for the CharRNN model
-text_file = os.path.join(data_dir, '{}_{}.txt'.format(file_type, region))
 if not os.path.isfile(text_file):
     sys.exit('Text file {} does not exist'.format(text_file))
 
@@ -189,13 +198,31 @@ for _ in range(num_layers-1):
 inference_model.add(TimeDistributed(Dense(charRNN.num_chars, activation='softmax')))
 inference_model.compile(loss='categorical_crossentropy', optimizer='Adam')
 
+class PlotLoss:
+
+    def __init__(self, epoch_slices):
+        self.x = []
+        self.loss = []
+        self.epoch_slices = epoch_slices
+
+    def update_loss(self, curr_epoch, curr_slice, curr_loss):
+        curr_x = curr_epoch + curr_slice / self.epoch_slices
+
+        self.x.append(curr_x)
+        self.loss.append(curr_loss)
+        self.plot()
+
+    def plot():
+        pass
+
+
 if mode == 'train':
 
-    #load saved models if they exist and train on them
-    if resume_training and os.path.exists(model_file):
+    #load saved model if it exists
+    if resume_training and os.path.isfile(model_file):
         model.load_weights(model_file)
 
-    if resume_training and os.path.exists(losses_file):
+    if resume_training and os.path.isfile(losses_file):
         with open(losses_file, 'rb') as f:
             losses = pickle.load(f)
             initial_epoch = len(losses) + 1
@@ -203,36 +230,52 @@ if mode == 'train':
         losses = []
         initial_epoch = 1
 
+    steps_per_slice = charRNN.steps_per_epoch // epoch_slices
+    remaining_steps = charRNN.steps_per_epoch % epoch_slices
 
-    for epoch in range(initial_epoch, initial_epoch + epochs):
+    print('Started training')
+    for curr_epoch in range(initial_epoch, initial_epoch + epochs):
 
-        startEpoch = time.time()
-        history = model.fit_generator(gen, steps_per_epoch=charRNN.steps_per_epoch, epochs=1, verbose=0)
-        model.save_weights(model_file)
+        start_epoch = time.time()
 
-        #save losses to a file
-        curr_loss = history.history['loss'][0]
-        losses.append(curr_loss)
-        with open(losses_file, 'wb') as f:
-            pickle.dump(losses, f)
+        for curr_slice in range(1, epoch_slices+1):
 
-        endEpoch = time.time()
-        elapsedSecs = round(endEpoch - startEpoch)
-        print('%ds - Epoch %d - Loss %.4f' % (elapsedSecs, epoch, curr_loss))
+            start_slice = time.time()
+            #history = model.fit_generator(gen, steps_per_epoch=steps_per_slice, epochs=1, verbose=0)
+            history = model.fit_generator(gen, steps_per_epoch=1, epochs=1, verbose=0)
+            model.save_weights(model_file)
 
-        #sample characters and save them to a file
-        inference_model.load_weights(model_file)
-        sampled_text = sample_chars(inference_model, charRNN, sample_size)
+            #save losses to a file
+            curr_loss = history.history['loss'][0]
+            losses.append(curr_loss)
+            """
+            with open(losses_file, 'wb') as f:
+                pickle.dump(losses, f)
+            """
 
-        sample_file = os.path.join(samples_dir, '{}_{}_epoch_{}.txt'.format(file_type, region, epoch))
-        with open(sample_file, 'w', encoding='utf-8') as f:
-            f.write(sampled_text)
+            end_slice = time.time()
+            elapsed_secs = round(end_slice - start_slice)
+            print('{}s - Epoch {} - {}/{} - Loss {:.4f}'.format(elapsed_secs, curr_epoch, curr_slice, epoch_slices, curr_loss))
 
-        print ('Created', sample_file)
+            #sample characters and save them to a file
+            """
+            inference_model.load_weights(model_file)
+            sampled_text = sample_chars(inference_model, charRNN, sample_size)
+
+            sample_file = os.path.join(samples_dir, '{}_{}_epoch_{}.txt'.format(file_type, region, epoch))
+            with open(sample_file, 'w', encoding='utf-8') as f:
+                f.write(sampled_text)
+
+            print ('Created', sample_file)
+            """
+
+        end_epoch = time.time()
+        elapsed_secs = round(end_epoch - start_epoch)
+        print('{}s - Epoch {}'.format(elapsed_secs, curr_epoch))
 
 elif mode == 'test':
     
-    if not os.path.exists(model_file):
+    if not os.path.isfile(model_file):
         sys.exit('Model weights {} do not exist'.format(model_file))
 
     inference_model.load_weights(model_file)

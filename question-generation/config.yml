@@ -6,14 +6,15 @@ dir_name:
   samples: samples
   images: images
 charRNNmodel:
-  mode: test
+  mode: train
   file_type: titles
   hidden_dim: 256
   num_layers: 1
   input_dropout: 0.1
   recurrent_dropout: 0.1
   epochs: 10
-  resume_training: True
+  epoch_slices: 10
+  resume_training: False
   sample_size: 5000
   max_len: 100
   step: 5
