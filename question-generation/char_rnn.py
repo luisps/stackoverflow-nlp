@@ -198,22 +198,44 @@ for _ in range(num_layers-1):
 inference_model.add(TimeDistributed(Dense(charRNN.num_chars, activation='softmax')))
 inference_model.compile(loss='categorical_crossentropy', optimizer='Adam')
 
-class PlotLoss:
+class LossHistory:
 
-    def __init__(self, epoch_slices):
-        self.x = []
-        self.loss = []
+    def __init__(self, history_file, plot_file, epoch_slices, load_from_file):
+        self.history_file = history_file
+        self.plot_file = plot_file
         self.epoch_slices = epoch_slices
 
-    def update_loss(self, curr_epoch, curr_slice, curr_loss):
+        if load_from_file:
+            with open(self.history_file, 'rb') as f:
+                self.x, self.loss = pickle.load(f)
+
+        else:
+            self.x = []
+            self.loss = []
+
+    def update(self, curr_epoch, curr_slice, curr_loss):
         curr_x = curr_epoch + curr_slice / self.epoch_slices
 
         self.x.append(curr_x)
         self.loss.append(curr_loss)
+
+        #save loss history to file
+        with open(self.history_file, 'wb') as f:
+            pickle.dump((self.x, self.loss), f)
+
         self.plot()
 
-    def plot():
-        pass
+    def plot(self):
+        if len(self.loss) < 2:
+            return
+
+        plt.plot(self.x, self.loss)
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+
+        #save loss plot to file
+        plt.savefig(self.plot_file)
+        plt.close()
 
 
 if mode == 'train':
@@ -222,13 +244,14 @@ if mode == 'train':
     if resume_training and os.path.isfile(model_file):
         model.load_weights(model_file)
 
-    if resume_training and os.path.isfile(losses_file):
-        with open(losses_file, 'rb') as f:
-            losses = pickle.load(f)
-            initial_epoch = len(losses) + 1
+    if resume_training and os.path.isfile(loss_history_file):
+        loss = LossHistory(loss_history_file, loss_plot_file, epoch_slices, True)
+        initial_epoch = (len(loss.loss) // epoch_slices) + 1
+        initial_slice = (len(loss.loss) % epoch_slices) + 1
     else:
-        losses = []
+        loss = LossHistory(loss_history_file, loss_plot_file, epoch_slices, False)
         initial_epoch = 1
+        initial_slice = 1
 
     steps_per_slice = charRNN.steps_per_epoch // epoch_slices
     remaining_steps = charRNN.steps_per_epoch % epoch_slices
@@ -238,20 +261,15 @@ if mode == 'train':
 
         start_epoch = time.time()
 
-        for curr_slice in range(1, epoch_slices+1):
+        for curr_slice in range(initial_slice, epoch_slices):
 
             start_slice = time.time()
             #history = model.fit_generator(gen, steps_per_epoch=steps_per_slice, epochs=1, verbose=0)
             history = model.fit_generator(gen, steps_per_epoch=1, epochs=1, verbose=0)
             model.save_weights(model_file)
 
-            #save losses to a file
             curr_loss = history.history['loss'][0]
-            losses.append(curr_loss)
-            """
-            with open(losses_file, 'wb') as f:
-                pickle.dump(losses, f)
-            """
+            loss.update(curr_epoch, curr_slice, curr_loss)
 
             end_slice = time.time()
             elapsed_secs = round(end_slice - start_slice)
