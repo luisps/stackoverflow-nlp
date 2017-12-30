@@ -1,0 +1,33 @@
+<html>
+<head>
+<title>Loss history</title>
+<style>
+
+.centered {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+</style>
+<script src="/jquery.min.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+
+$(document).ready(function() {
+
+    var socket = io();
+
+    socket.on('imageData', function(data) {
+      $("#loss-plot").attr("src", data);
+    });
+
+});
+
+</script>
+</head>
+<body>
+<img id="loss-plot" class="centered">
+</body>
+</html>

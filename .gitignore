@@ -2,6 +2,7 @@
 *.swp
 __pycache__
 *.hf5
+node_modules/
 
 data/
 mappings/
