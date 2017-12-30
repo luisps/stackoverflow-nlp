@@ -185,10 +185,10 @@ max_len = config['charRNNmodel']['max_len']
 step = config['charRNNmodel']['step']
 batch_size = config['charRNNmodel']['batch_size']
 
-model_file = os.path.join(models_dir, 'char_rnn_{}_{}.h5'.format(file_type, region))
+model_file = os.path.join(models_dir, '{}_{}_weights.h5'.format(file_type, region))
 
-loss_history_file = os.path.join(models_dir, 'char_rnn_{}_{}.loss'.format(file_type, region))
-loss_plot_file = os.path.join(models_dir, 'char_rnn_{}_{}.png'.format(file_type, region))
+loss_history_file = os.path.join(models_dir, '{}_{}_loss.pkl'.format(file_type, region))
+loss_plot_file = os.path.join(models_dir, '{}_{}_loss.png'.format(file_type, region))
 
 text_file = os.path.join(data_dir, '{}_{}.txt'.format(file_type, region))
 sample_file = os.path.join(samples_dir, '{}_{}.txt'.format(file_type, region))
