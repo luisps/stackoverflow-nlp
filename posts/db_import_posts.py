@@ -6,9 +6,11 @@ import sys
 
 def recreate_table(cur):
 
+    #create table for questions
     create_table_query = '''\
-CREATE TABLE Posts (
+CREATE TABLE Questions (
     Id UNSIGNED BIG INT,
+    UserId UNSIGNED BIG INT,
     Title text,
     Tags text,
     CreationDate TEXT,
@@ -17,12 +19,30 @@ CREATE TABLE Posts (
 );\
     '''
 
-    cur.execute('DROP TABLE IF EXISTS Posts')
+    cur.execute('DROP TABLE IF EXISTS Questions')
     cur.execute(create_table_query)
     
-    #create view of Posts without post body(makes select statements faster to type)
-    cur.execute('DROP VIEW IF EXISTS p')
-    cur.execute('CREATE VIEW p AS SELECT Id, Title, Tags, CreationDate FROM Posts')
+    #create view of Questions without body(makes select statements faster to type)
+    cur.execute('DROP VIEW IF EXISTS q')
+    cur.execute('CREATE VIEW q AS SELECT Id, UserId, Title, Tags, CreationDate FROM Questions')
+
+    #create table for answers
+    create_table_query = '''\
+CREATE TABLE Answers (
+    Id UNSIGNED BIG INT,
+    UserId UNSIGNED BIG INT,
+    CreationDate TEXT,
+    Body text,
+    PRIMARY KEY (Id)
+);\
+    '''
+
+    cur.execute('DROP TABLE IF EXISTS Answers')
+    cur.execute(create_table_query)
+    
+    #create view of Answers without body(makes select statements faster to type)
+    cur.execute('DROP VIEW IF EXISTS a')
+    cur.execute('CREATE VIEW a AS SELECT Id, UserId, CreationDate FROM Answers')
 
 def read_posts(posts_file, row_filter_func, row_process_func):
 
@@ -31,7 +51,7 @@ def read_posts(posts_file, row_filter_func, row_process_func):
 
     for event, elem in context:
 
-        if row_filter_func(posts, elem):
+        if row_filter_func(elem):
             row_process_func(posts, elem)
 
         #resource cleaning - contributes to small memory footprint
@@ -42,19 +62,18 @@ def read_posts(posts_file, row_filter_func, row_process_func):
     del context
     return posts
 
-def row_filter(posts, elem):
-
-    postTypeId = int(elem.attrib['PostHistoryTypeId'])
-    postId = int(elem.attrib['PostId'])
+def row_filter(elem):
 
 	#discard rows that are not titles, tags or body
+    postTypeId = int(elem.attrib['PostHistoryTypeId'])
     if postTypeId > 9:
         return False
 
-	#discard answers
-    if is_body(postTypeId) and postId not in posts:
+    #discard posts if the user was deleted
+    if 'UserDisplayName' in elem.attrib or elem.attrib['UserId'] == '-1':
         return False
 
+    #discard titles that don't have a text attribute
     if postTypeId == 1 and 'Text' not in elem.attrib:
         return False
 
@@ -64,12 +83,14 @@ def row_process(posts, elem):
 
     postTypeId = int(elem.attrib['PostHistoryTypeId'])
     postId = int(elem.attrib['PostId'])
+    userId = int(elem.attrib['UserId'])
 
     creationDate = elem.attrib['CreationDate'][:10]
     text = elem.attrib['Text']
 
     posts[postId] = posts[postId] if postId in posts else {'title': '', 'tags': '', 'body': ''}
     posts[postId]['creationDate'] = creationDate
+    posts[postId]['userId'] = userId
 
     if is_title(postTypeId):
         posts[postId]['title'] = text
@@ -129,12 +150,23 @@ posts = read_posts(posts_file, row_filter, row_process)
 
 #insert posts
 cur.execute('BEGIN TRANSACTION');
-for postId, question in posts.items():
-	row = (postId, question['title'], question['tags'],
-           question['creationDate'], question['body']
-		  )
+for postId, post in posts.items():
 
-	cur.execute('INSERT INTO Posts VALUES (?,?,?,?,?)', row)
+    #post is a question
+    if post['tags'] != '':
+        row = (postId, post['userId'], post['title'], post['tags'],
+               post['creationDate'], post['body']
+              )
+
+        cur.execute('INSERT INTO Questions VALUES (?,?,?,?,?,?)', row)
+
+    #post is an answer
+    else:
+        #if we don't need the answer's body we can save a lot of space by omitting it
+        row = (postId, post['userId'], post['creationDate'], None)
+        #row = (postId, post['userId'], post['creationDate'], post['body'])
+
+        cur.execute('INSERT INTO Answers VALUES (?,?,?,?)', row)
 
 cur.execute('COMMIT TRANSACTION');
 
