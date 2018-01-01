@@ -24,7 +24,7 @@ if not os.path.exists(data_dir):
 conn = sqlite3.connect(db_file)
 cur = conn.cursor()
 
-select_iter = cur.execute('SELECT title FROM Posts')
+select_iter = cur.execute('SELECT Title FROM Questions')
 
 titles_text = ''
 for row in select_iter:

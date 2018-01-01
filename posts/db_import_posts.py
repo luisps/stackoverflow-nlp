@@ -64,16 +64,16 @@ def read_posts(posts_file, row_filter_func, row_process_func):
 
 def row_filter(elem):
 
-	#discard rows that are not titles, tags or body
+	#discard rows that are not title, tags or body
     postTypeId = int(elem.attrib['PostHistoryTypeId'])
     if postTypeId > 9:
         return False
 
-    #discard posts if the user was deleted
-    if 'UserDisplayName' in elem.attrib or elem.attrib['UserId'] == '-1':
+    #discard posts with a deleted user
+    if 'UserId' in elem.attrib and elem.attrib['UserId'] == '-1':
         return False
 
-    #discard titles that don't have a text attribute
+    #discard titles without a text attribute
     if postTypeId == 1 and 'Text' not in elem.attrib:
         return False
 
@@ -83,7 +83,7 @@ def row_process(posts, elem):
 
     postTypeId = int(elem.attrib['PostHistoryTypeId'])
     postId = int(elem.attrib['PostId'])
-    userId = int(elem.attrib['UserId'])
+    userId = int(elem.attrib['UserId']) if 'UserId' in elem.attrib else None
 
     creationDate = elem.attrib['CreationDate'][:10]
     text = elem.attrib['Text']
