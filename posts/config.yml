@@ -1,0 +1,13 @@
+region: en
+available_regions:
+  - en  # English
+  - pt  # Portuguese
+  - es  # Spanish
+  - ru  # Russian
+  - ja  # Japanese
+params:
+  use_bulk_insert: True
+  bulk_size: 4096
+  insert_answers_body: True
+  verbose: True
+

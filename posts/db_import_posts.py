@@ -1,11 +1,12 @@
 from lxml import etree
 import sqlite3
 import os
+import yaml
 import subprocess
 import sys
 import time
 
-def recreate_table(cur):
+def recreate_table(conn, cur):
 
     #create table for questions
     create_table_query = '''\
@@ -45,10 +46,15 @@ CREATE TABLE Answers (
     cur.execute('DROP VIEW IF EXISTS a')
     cur.execute('CREATE VIEW a AS SELECT Id, UserId, CreationDate FROM Answers')
 
-def import_posts(posts_file, row_filter_func, row_process_func, bulk_ready_func, cur, use_bulk_insert=True, bulk_size=4096):
+    #commit table creation
+    conn.commit()
+
+def import_posts(posts_file, params, cur):
 
     posts = {}
-    params = {}
+    use_bulk_insert = params['use_bulk_insert']
+    bulk_size = params['bulk_size']
+
     params['currentMonth'] = ''
     params['questions'] = []
     params['answers'] = []
@@ -58,11 +64,11 @@ def import_posts(posts_file, row_filter_func, row_process_func, bulk_ready_func,
 
     for event, elem in context:
 
-        if row_filter_func(elem):
-            row_process_func(posts, params, elem)
+        if row_filter(elem):
+            row_process(posts, params, elem)
             bulk_seen += 1
 
-            if use_bulk_insert and bulk_seen >= bulk_size and bulk_ready_func(elem):
+            if use_bulk_insert and bulk_seen >= bulk_size and bulk_ready(elem):
                 bulk_insert(posts, params, cur)
                 bulk_seen = 0
 
@@ -74,9 +80,11 @@ def import_posts(posts_file, row_filter_func, row_process_func, bulk_ready_func,
     if bulk_seen != 0:
         bulk_insert(posts, params, cur)
 
-def bulk_insert(posts, params, cur, insert_answers_body=False):
+def bulk_insert(posts, params, cur):
 
+    insert_answers_body = params['insert_answers_body']
     cur.execute('BEGIN TRANSACTION')
+
     for postId, post in posts.items():
 
         if postId in params['questions']:
@@ -159,28 +167,16 @@ def row_filter(elem):
     if postTypeId > 9:
         return False
 
+    #discard rows without a text attribute
+    if 'Text' not in elem.attrib:
+        return False
+
     #discard posts with a deleted user
     if 'UserId' in elem.attrib and elem.attrib['UserId'] == '-1':
         return False
 
-    #discard titles without a text attribute
-    if postTypeId == 1 and 'Text' not in elem.attrib:
-        return False
-
     return True
 
-def row_filter_en(elem):
-
-    #creationDate = elem.attrib['CreationDate'][:10]
-    postTypeId = int(elem.attrib['PostHistoryTypeId'])
-    if is_body(postTypeId):
-        return False
-
-    if is_tags(postTypeId) and 'Text' not in elem.attrib:
-        return False
-
-    return row_filter(elem)
-    
 def row_process(posts, params, elem):
 
     postTypeId = int(elem.attrib['PostHistoryTypeId'])
@@ -191,7 +187,7 @@ def row_process(posts, params, elem):
     text = elem.attrib['Text']
 
     currentMonth = creationDate[:7]
-    if currentMonth > params['currentMonth']:
+    if params['verbose'] and currentMonth > params['currentMonth']:
         print('Importing posts from {}'.format(currentMonth))
         params['currentMonth'] = currentMonth
 
@@ -222,43 +218,36 @@ def is_tags(postTypeId):
     return postTypeId == 3 or postTypeId == 6 or postTypeId == 9
 
 
-available_regions = ['en', 'pt', 'es', 'ru', 'ja']
-
-#Selecting region
-if len(sys.argv) < 2:
-    region = 'pt'
-    print ('No region passed as argument. Using default region: ' + region)
-else:
-    region = sys.argv[1]
-
-    if region not in available_regions:
-        sys.exit('Region must be one of the available regions: ' + ', '.join(available_regions))
-
-
 #change cwd to the directory that holds the script
 os.chdir(sys.path[0])
 
+#read variables from the configuration file
+with open('config.yml', 'r') as f:
+    config = yaml.load(f)
+
+region = config['region']
+available_regions = config['available_regions']
+params = config['params']
+
+if region not in available_regions:
+    sys.exit('Region must be one of the available regions: ' + ', '.join(available_regions))
+
 posts_file = 'Posts_{}.xml'.format(region)
 db_file = 'Posts_{}.db'.format(region)
+
+#download XML file if not available locally
+if not os.path.isfile(posts_file):
+    print("The file {} doesn't exist. Downloading it now to {}".format(posts_file, os.getcwd()))
+    subprocess.call(['./get_posts.sh', region])
 
 #create connection
 conn = sqlite3.connect(db_file)
 cur = conn.cursor()
 
-recreate_table(cur)
-conn.commit()
-
-#download XML file if not available locally
-if not os.path.isfile(posts_file):
-    print('The file', posts_file, "doesn't exist. Downloading it now to posts directory.")
-    subprocess.call(['./get_posts.sh', region])
-
 start_import = time.time()
 
-if region == 'en':
-    import_posts(posts_file, row_filter_en, row_process, bulk_ready, cur)
-else:
-    import_posts(posts_file, row_filter, row_process, bulk_ready, cur)
+recreate_table(conn, cur)
+import_posts(posts_file, params, cur)
 
 end_import = time.time()
 elapsed_secs = round(end_import - start_import)
