@@ -2,8 +2,6 @@ import sqlite3
 import os
 import yaml
 import sys
-import re
-from collections import defaultdict
 import pandas as pd
 
 import matplotlib
@@ -33,67 +31,50 @@ cur = conn.cursor()
 
 
 #plot number of questions, answers and active users through time
-
-#find date range(the date for the very first post and for the most recent one)
-date_range_query = '''
-SELECT MIN(CreationDate) AS startDate, MAX(CreationDate) AS endDate
-FROM Questions
-'''
-select_iter = cur.execute(date_range_query)
-
-#variables used by this and other timeseries plots
-start_date, end_date = select_iter.fetchone()
-last_year, last_month = int(end_date[:4]), int(end_date[5:7])
-
-df_index = pd.date_range(start_date, end_date, freq='D')
-df = pd.DataFrame(0, index=df_index, columns=['Questions', 'Answers', 'Active Users'])
-
 questions_per_day_query = '''
-SELECT CreationDate, COUNT(Id)
+SELECT CreationDate, COUNT(Id) AS Questions
 FROM Questions
 GROUP BY CreationDate
 '''
-select_iter = cur.execute(questions_per_day_query)
-
-for row in select_iter:
-    date, num_questions = row[0], row[1]
-    df.loc[date, 'Questions'] = num_questions
+questions_per_day = pd.read_sql_query(questions_per_day_query, conn, 'CreationDate', parse_dates=['CreationDate'])
 
 answers_per_day_query = '''
-SELECT CreationDate, COUNT(Id)
+SELECT CreationDate, COUNT(Id) AS Answers
 FROM Answers
-WHERE CreationDate >= "{}"
 GROUP BY CreationDate
 '''
-select_iter = cur.execute(answers_per_day_query.format(start_date))
-
-for row in select_iter:
-    date, num_answers = row[0], row[1]
-    df.loc[date, 'Answers'] = num_answers
+answers_per_day = pd.read_sql_query(answers_per_day_query, conn, 'CreationDate', parse_dates=['CreationDate'])
 
 active_users_per_day_query = '''
-SELECT CreationDate, SUM(activeUsers)
+SELECT CreationDate, SUM(activeUsers) AS ActiveUsers
 FROM (
-SELECT CreationDate, COUNT(DISTINCT UserId) AS activeUsers
-FROM Questions
-GROUP BY CreationDate
-UNION ALL
-SELECT CreationDate, COUNT(DISTINCT UserId) AS activeUsers
-FROM Answers
-WHERE CreationDate >= "{}"
-GROUP BY CreationDate
-)
-GROUP BY CreationDate
+    SELECT CreationDate, COUNT(DISTINCT UserId) AS ActiveUsers
+    FROM Questions
+    GROUP BY CreationDate
+    UNION ALL
+    SELECT CreationDate, COUNT(DISTINCT UserId) AS ActiveUsers
+    FROM Answers
+    GROUP BY CreationDate
+) GROUP BY CreationDate
 '''
-select_iter = cur.execute(active_users_per_day_query.format(start_date))
+active_users_per_day = pd.read_sql_query(active_users_per_day_query, conn, 'CreationDate', parse_dates=['CreationDate'])
+active_users_per_day.rename(columns={'ActiveUsers': 'Active Users'}, inplace=True)  # add space character on the column name for clarity
 
-for row in select_iter:
-    date, num_active_users = row[0], row[1]
-    df.loc[date, 'Active Users'] = num_active_users
+#concatenate all metrics into a single dataframe
+df = pd.concat([questions_per_day, answers_per_day, active_users_per_day], axis=1, join='inner')
 
-#remove last month as it is not complete and so it can not be used
-#when aggregating data in months
-df = df[(df.index.year != last_year) | (df.index.month != last_month)]
+#reindex dataframe so that missing days with counts 0 are also on the index
+start_date, end_date = df.index[0], df.index[-1]
+df_index = pd.date_range(start_date, end_date, freq='D')
+df = df.reindex(df_index)
+
+df.fillna(0, inplace=True)
+df = df.astype('int64')
+
+#remove last month if it is not complete, otherwise when aggregating data 
+#in months the last month would be way lower than expected
+if not end_date.is_month_end:
+    df = df[(df.index.year != end_date.year) | (df.index.month != end_date.month)]
 
 df.resample('M').mean().plot(title='StackOverflow evolution through time')
 
@@ -104,24 +85,21 @@ print ('Created', plot_file)
 
 
 #plot number of tags per question
-select_iter = cur.execute('SELECT Tags FROM Questions')
+num_tags_query = '''
+SELECT numTags, count(numTags) AS Count
+FROM (
+    SELECT count(Tag) AS numTags
+    FROM Questions, Tags
+    WHERE Questions.Id = Tags.QuestionId
+    GROUP BY Id
+) GROUP BY numTags
+LIMIT 5
+'''
+df = pd.read_sql_query(num_tags_query, conn, 'numTags')
 
-tag_count = defaultdict(int)
-num_tags = defaultdict(int)
+del df.index.name  # otherwise the index name would appear on the plot
+s = df['Count']
 
-#compile regex outside the loop for efficiency
-tag_re = re.compile('<(.*?)>')
-
-for row in select_iter:
-
-    #tag frequency
-    tags = tuple(tag_re.findall(row[0]))
-    num_tags[len(tags)] += 1
-
-    for tag in tags:
-        tag_count[tag] += 1
-
-s = pd.Series(num_tags)
 s.plot.barh(title='Number of tags per question')
 plt.gca().invert_yaxis()
 
@@ -132,17 +110,25 @@ print ('Created', plot_file)
 
 
 #plot most popular tags
+popular_tags_query = '''
+SELECT Tag, count(Id) AS Count
+FROM Questions, Tags
+WHERE Questions.Id = Tags.QuestionId
+GROUP BY Tag
+ORDER BY count(Id) DESC
+LIMIT {}
+'''
 num_popular_tags = 10
-sorted_tag_freq = sorted(tag_count, key=tag_count.get)
+df = pd.read_sql_query(popular_tags_query.format(num_popular_tags), conn, 'Tag')
+popular_tags = tuple(df.index)
 
-popular_tags = sorted_tag_freq[-num_popular_tags:][::-1]
-popular_tags_count = [tag_count[tag] for tag in popular_tags]
+del df.index.name
+s = df['Count']
 
-s = pd.Series(popular_tags_count, index=popular_tags)
 s.plot.bar(title='Number of questions for popular tags')
+plt.tight_layout()
 
 plot_file = os.path.join(images_dir, 'popular_tags_total_{}.png'.format(region))
-plt.tight_layout()
 plt.savefig(plot_file)
 plt.close()
 print ('Created', plot_file)
@@ -150,25 +136,29 @@ print ('Created', plot_file)
 
 #plot number of questions through time for most popular tags
 tag_questions_per_day_query = '''
-SELECT CreationDate, COUNT(Id)
-FROM Questions
-WHERE tags like '%<{}>%'
-GROUP BY CreationDate
+SELECT Tag, CreationDate, count(Id) AS Count
+FROM Questions, Tags
+WHERE Questions.Id = Tags.QuestionId AND Tag in {}
+GROUP BY Tag, CreationDate
 '''
+df = pd.read_sql_query(tag_questions_per_day_query.format(popular_tags), conn, parse_dates=['CreationDate'])
 
+#apply pivoting so that each tag of the popular tags becomes its own column
+df = df.pivot(index='CreationDate', columns='Tag', values='Count')
+df = df[list(popular_tags)]
+del df.columns.name
+
+#reindex dataframe so that missing days with counts 0 are also on the index
+start_date, end_date = df.index[0], df.index[-1]
 df_index = pd.date_range(start_date, end_date, freq='D')
-df = pd.DataFrame(0, index=df_index, columns=popular_tags)
+df = df.reindex(df_index)
 
-for tag in popular_tags:
-    select_iter = cur.execute(tag_questions_per_day_query.format(tag))
+df.fillna(0, inplace=True)
+df = df.astype('int64')
 
-    for row in select_iter:
-        date, num_questions = row[0], row[1]
-        df.loc[date, tag] = num_questions
-
-
-#remove last month as it is not complete
-df = df[(df.index.year != last_year) | (df.index.month != last_month)]
+#remove last month if it is not complete
+if not end_date.is_month_end:
+    df = df[(df.index.year != end_date.year) | (df.index.month != end_date.month)]
 
 df.resample('M').mean().plot.area(title='Popular tags evolution through time')
 
@@ -176,6 +166,5 @@ plot_file = os.path.join(images_dir, 'popular_tags_evolution_{}.png'.format(regi
 plt.savefig(plot_file)
 plt.close()
 print ('Created', plot_file)
-
 
 conn.close()
