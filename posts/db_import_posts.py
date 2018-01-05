@@ -5,22 +5,22 @@ import yaml
 import subprocess
 import sys
 import time
+import re
 
 def recreate_table(conn, cur):
 
     #create table for questions
-    create_table_query = '''\
+    create_table_query = '''
 CREATE TABLE Questions (
-    Id UNSIGNED BIG INT,
-    UserId UNSIGNED BIG INT,
-    Title text,
-    Tags text,
+    Id INTEGER,
+    UserId INTEGER,
+    Title TEXT,
+    Tags TEXT,
     CreationDate TEXT,
-    Body text,
+    Body TEXT,
     PRIMARY KEY (Id)
-);\
+)
     '''
-
     cur.execute('DROP TABLE IF EXISTS Questions')
     cur.execute(create_table_query)
     
@@ -28,17 +28,27 @@ CREATE TABLE Questions (
     cur.execute('DROP VIEW IF EXISTS q')
     cur.execute('CREATE VIEW q AS SELECT Id, UserId, Title, Tags, CreationDate FROM Questions')
 
-    #create table for answers
-    create_table_query = '''\
-CREATE TABLE Answers (
-    Id UNSIGNED BIG INT,
-    UserId UNSIGNED BIG INT,
-    CreationDate TEXT,
-    Body text,
-    PRIMARY KEY (Id)
-);\
-    '''
+    #create table for tags
+    create_table_query = '''
+CREATE TABLE Tags (
+    QuestionId INTEGER,
+    Tag TEXT,
+    PRIMARY KEY (QuestionId, Tag)
+)
+'''
+    cur.execute('DROP TABLE IF EXISTS Tags')
+    cur.execute(create_table_query)
 
+    #create table for answers
+    create_table_query = '''
+CREATE TABLE Answers (
+    Id INTEGER,
+    UserId INTEGER,
+    CreationDate TEXT,
+    Body TEXT,
+    PRIMARY KEY (Id)
+)
+    '''
     cur.execute('DROP TABLE IF EXISTS Answers')
     cur.execute(create_table_query)
     
@@ -82,6 +92,8 @@ def import_posts(posts_file, params, cur):
 
 def bulk_insert(posts, params, cur):
 
+    questions_to_insert = []
+    answers_to_insert = []
     insert_answers_body = params['insert_answers_body']
     cur.execute('BEGIN TRANSACTION')
 
@@ -133,8 +145,8 @@ def bulk_insert(posts, params, cur):
                        post['creationDate'], post['body']
                       )
 
+                questions_to_insert.append(row)
                 params['questions'].append(postId)
-                cur.execute('INSERT INTO Questions VALUES (?,?,?,?,?,?)', row)
 
             #post is an answer
             else:
@@ -142,15 +154,18 @@ def bulk_insert(posts, params, cur):
                 body = post['body'] if insert_answers_body else None
                 row = (postId, post['userId'], post['creationDate'], body)
 
+                answers_to_insert.append(row)
                 params['answers'].append(postId)
-                cur.execute('INSERT INTO Answers VALUES (?,?,?,?)', row)
 
+    #perform inserts all at once for extra performance
+    cur.executemany('INSERT INTO Questions VALUES (?,?,?,?,?,?)', questions_to_insert)
+    cur.executemany('INSERT INTO Answers VALUES (?,?,?,?)', answers_to_insert)
+
+    cur.execute('COMMIT TRANSACTION')
 
     #since we have inserted all posts on the DB we can now clear the posts dict
     #clearing the dict is crucial to make sure that RAM doesn't grow unbounded
     posts.clear()
-
-    cur.execute('COMMIT TRANSACTION')
 
 def bulk_ready(elem):
 
@@ -217,6 +232,22 @@ def is_body(postTypeId):
 def is_tags(postTypeId):
     return postTypeId == 3 or postTypeId == 6 or postTypeId == 9
 
+def populate_tags_table(conn, cur):
+
+    #compile regex outside the loop for efficiency
+    tag_re = re.compile('<(.*?)>')
+    tags_to_insert = []
+
+    select_iter = cur.execute('SELECT Id, Tags FROM Questions')
+    for row in select_iter:
+        question_id, tag_str = row
+        tag_list = tag_re.findall(tag_str) if tag_str else []
+
+        tags_to_insert += [(question_id, tag) for tag in tag_list]
+
+    cur.executemany('INSERT INTO Tags VALUES (?,?)', tags_to_insert)
+    conn.commit()
+
 
 #change cwd to the directory that holds the script
 os.chdir(sys.path[0])
@@ -227,7 +258,8 @@ with open('config.yml', 'r') as f:
 
 region = config['region']
 available_regions = config['available_regions']
-params = config['params']
+params_name = config['params']['regions'][region]
+params = config['params'][params_name]
 
 if region not in available_regions:
     sys.exit('Region must be one of the available regions: ' + ', '.join(available_regions))
@@ -248,6 +280,7 @@ start_import = time.time()
 
 recreate_table(conn, cur)
 import_posts(posts_file, params, cur)
+populate_tags_table(conn, cur)
 
 end_import = time.time()
 elapsed_secs = round(end_import - start_import)

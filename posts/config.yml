@@ -6,8 +6,13 @@ available_regions:
   - ru  # Russian
   - ja  # Japanese
 params:
-  use_bulk_insert: True
-  bulk_size: 4096
-  insert_answers_body: True
-  verbose: True
+  regions:
+    en: normal
+    pt: normal
+    es: normal
+  normal:
+    use_bulk_insert: True
+    bulk_size: 100000
+    insert_answers_body: False
+    verbose: True
 
