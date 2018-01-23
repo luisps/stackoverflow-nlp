@@ -18,30 +18,49 @@ else
 	region=$1
 fi
 
-out_file="Posts_$region.xml"
-if [ -f $out_file ]; then
-	echo "$out_file already exists"
+posts_file="Posts_$region.xml"
+users_file="Users_$region.xml"
+if [ -f $posts_file ] && [ -f $users_file ]; then
+	echo "$posts_file and $users_file already exist"
 	exit
 fi
 
-#compressed file name
+#download compressed files
+download_link="https://archive.org/download/stackexchange/"
+
 if [ $region == 'en' ]; then
-	zipped_file="stackoverflow.com-PostHistory.7z"
+	zipped_posts="stackoverflow.com-PostHistory.7z"
+	zipped_users="stackoverflow.com-Users.7z"
 	echo "Large file warning: Compressed PostHistory.xml for EN is ~20GB. Uncompressed is ~100GB"
+
+	wget $download_link$zipped_posts -q --show-progress
+	wget $download_link$zipped_users -q --show-progress
+
+	echo "Uncompressing $posts_file"
+	7za -y x $zipped_posts PostHistory.xml > /dev/null
+
+	echo "Uncompressing $users_file"
+	7za -y x $zipped_users Users.xml > /dev/null
+
+	mv PostHistory.xml $posts_file
+	mv Users.xml $users_file
+	rm $zipped_posts
+	rm $zipped_users
+
 else
 	zipped_file="$region.stackoverflow.com.7z"
+	wget $download_link$zipped_file -q --show-progress
+
+	echo "Uncompressing $posts_file"
+	7za -y x $zipped_file PostHistory.xml > /dev/null
+
+	echo "Uncompressing $users_file"
+	7za -y x $zipped_file Users.xml > /dev/null
+
+	mv PostHistory.xml $posts_file
+	mv Users.xml $users_file
+	rm $zipped_file
+
 fi
 
-#download compressed file if it doesn't already exist locally
-if [ ! -f $zipped_file ]; then
-	download_link="https://archive.org/download/stackexchange/$zipped_file"
-	wget $download_link -q --show-progress
-fi
-
-echo "Uncompressing $zipped_file"
-7za -y x $zipped_file PostHistory.xml > /dev/null
-
-mv PostHistory.xml $out_file
-rm $zipped_file
-
-echo "$out_file is ready"
+echo "Done"

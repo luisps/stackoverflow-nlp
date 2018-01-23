@@ -1,13 +1,13 @@
+from timeit import default_timer as timer
 from lxml import etree
 import sqlite3
 import os
 import yaml
 import subprocess
 import sys
-import time
 import re
 
-def recreate_table(conn, cur):
+def create_tables(conn, cur):
 
     #create table for questions
     create_table_query = '''
@@ -56,15 +56,33 @@ CREATE TABLE Answers (
     cur.execute('DROP VIEW IF EXISTS a')
     cur.execute('CREATE VIEW a AS SELECT Id, UserId, CreationDate FROM Answers')
 
-    #commit table creation
+    #create table for users
+    create_table_query = '''
+CREATE TABLE Users (
+    Id INTEGER,
+    Reputation INTEGER,
+    CreationDate TEXT,
+    DisplayName TEXT,
+    UpVotes INTEGER,
+    DownVotes INTEGER,
+    PRIMARY KEY (Id)
+)
+'''
+    cur.execute('DROP TABLE IF EXISTS Users')
+    cur.execute(create_table_query)
+
+    #empty otherwise unused space and commit table creation
+    cur.execute('vacuum')
     conn.commit()
 
-def import_posts(posts_file, params, cur):
+def import_posts(posts_file, cur, params):
 
     posts = {}
     use_bulk_insert = params['use_bulk_insert']
     bulk_size = params['bulk_size']
 
+    #define extra parameters - modifiable state passed to the underlying functions
+    params = params.copy()
     params['currentMonth'] = ''
     params['questions'] = []
     params['answers'] = []
@@ -232,20 +250,80 @@ def is_body(postTypeId):
 def is_tags(postTypeId):
     return postTypeId == 3 or postTypeId == 6 or postTypeId == 9
 
-def populate_tags_table(conn, cur):
+def import_tags(conn, cur, params):
+
+    tags_to_insert = []
+    use_bulk_insert = params['use_bulk_insert']
+    bulk_size = params['bulk_size']
 
     #compile regex outside the loop for efficiency
     tag_re = re.compile('<(.*?)>')
-    tags_to_insert = []
 
     select_iter = cur.execute('SELECT Id, Tags FROM Questions')
+    bulk_seen = 0
+
     for row in select_iter:
         question_id, tag_str = row
         tag_list = tag_re.findall(tag_str) if tag_str else []
 
         tags_to_insert += [(question_id, tag) for tag in tag_list]
+        bulk_seen += len(tag_list)
 
-    cur.executemany('INSERT INTO Tags VALUES (?,?)', tags_to_insert)
+        if use_bulk_insert and bulk_seen >= bulk_size:
+            cur.executemany('INSERT INTO Tags VALUES (?,?)', tags_to_insert)
+            tags_to_insert.clear()
+            bulk_seen = 0
+
+    if bulk_seen != 0:
+        cur.executemany('INSERT INTO Tags VALUES (?,?)', tags_to_insert)
+        tags_to_insert.clear()
+
+    conn.commit()
+
+def import_users(users_file, conn, cur, params):
+
+    users_to_insert = []
+    use_bulk_insert = params['use_bulk_insert']
+    bulk_size = params['bulk_size']
+
+    context = etree.iterparse(users_file, events=('end',), tag='row')
+    bulk_seen = 0
+
+    for event, elem in context:
+
+        user = (int(elem.attrib['Id']), int(elem.attrib['Reputation']), elem.attrib['CreationDate'][:10],
+                elem.attrib['DisplayName'], int(elem.attrib['UpVotes']), int(elem.attrib['DownVotes']))
+
+        users_to_insert.append(user)
+        bulk_seen += 1
+
+        if use_bulk_insert and bulk_seen >= bulk_size:
+            cur.executemany('INSERT INTO Users VALUES (?,?,?,?,?,?)', users_to_insert)
+            users_to_insert.clear()
+            bulk_seen = 0
+
+        #resource cleaning - contributes to small memory footprint
+        elem.clear()
+        while elem.getprevious() is not None:
+            del elem.getparent()[0]
+
+    if bulk_seen != 0:
+        cur.executemany('INSERT INTO Users VALUES (?,?,?,?,?,?)', users_to_insert)
+        users_to_insert.clear()
+
+    conn.commit()
+
+def post_preprocess(conn, cur):
+
+    #convert tab characters in Title to spaces
+    cur.execute("UPDATE Questions SET Title = REPLACE(Title, char(9), ' ')")
+
+    #convert <CR><LF> DOS format to <LF> Unix format
+    cur.execute("UPDATE Questions SET Body = REPLACE(Body, x'0D0A', x'0A')")
+
+    #delete user with Id = -1 since it corresponds to a bot
+    cur.execute('DELETE FROM Users WHERE Id = -1')
+
     conn.commit()
 
 
@@ -258,35 +336,45 @@ with open('config.yml', 'r') as f:
 
 region = config['region']
 available_regions = config['available_regions']
-params_name = config['params']['regions'][region]
-params = config['params'][params_name]
+params = config['params']
 
 if region not in available_regions:
     sys.exit('Region must be one of the available regions: ' + ', '.join(available_regions))
 
 posts_file = 'Posts_{}.xml'.format(region)
+users_file = 'Users_{}.xml'.format(region)
 db_file = 'Posts_{}.db'.format(region)
 
-#download XML file if not available locally
-if not os.path.isfile(posts_file):
-    print("The file {} doesn't exist. Downloading it now to {}".format(posts_file, os.getcwd()))
+#download XML files if not available locally
+if not os.path.isfile(posts_file) or not os.path.isfile(users_file):
+    print("Downloading XML files for region {}".format(region))
     subprocess.call(['./get_posts.sh', region])
 
 #create connection
 conn = sqlite3.connect(db_file)
 cur = conn.cursor()
 
-start_import = time.time()
+start = timer()
+create_tables(conn, cur)
+print('Creating tables took {:.2f}s'.format(timer() - start))
 
-recreate_table(conn, cur)
-import_posts(posts_file, params, cur)
-populate_tags_table(conn, cur)
+print('Started importing posts')
+start = timer()
+import_posts(posts_file, cur, params)
+print('Importing posts took {:.2f}s'.format(timer() - start))
 
-end_import = time.time()
-elapsed_secs = round(end_import - start_import)
+start = timer()
+import_tags(conn, cur, params)
+print('Importing tags took {:.2f}s'.format(timer() - start))
+
+start = timer()
+import_users(users_file, conn, cur, params)
+print('Importing users took {:.2f}s'.format(timer() - start))
+
+start = timer()
+post_preprocess(conn, cur)
+print('Preprocessing posts took {:.2f}s'.format(timer() - start))
+
+print('Created DB file', db_file)
 
 conn.close()
-
-print('Importing posts took {}s'.format(elapsed_secs))
-print('Successfully extracted posts from XML file', posts_file)
-print('Created DB file', db_file)

@@ -1,4 +1,4 @@
-region: en
+region: pt
 available_regions:
   - en  # English
   - pt  # Portuguese
@@ -6,11 +6,6 @@ available_regions:
   - ru  # Russian
   - ja  # Japanese
 params:
-  regions:
-    en: normal
-    pt: normal
-    es: normal
-  normal:
     use_bulk_insert: True
     bulk_size: 100000
     insert_answers_body: False
