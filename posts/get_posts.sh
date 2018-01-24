@@ -29,22 +29,26 @@ fi
 download_link="https://archive.org/download/stackexchange/"
 
 if [ $region == 'en' ]; then
-	zipped_posts="stackoverflow.com-PostHistory.7z"
+	zipped_posts="stackoverflow.com-Posts.7z"
 	zipped_users="stackoverflow.com-Users.7z"
-	echo "Large file warning: Compressed PostHistory.xml for EN is ~20GB. Uncompressed is ~100GB"
+	echo "Large file warning: Compressed Posts.xml for EN is ~15GB. Uncompressed is ~60GB"
 
 	wget $download_link$zipped_posts -q --show-progress
 	wget $download_link$zipped_users -q --show-progress
 
 	echo "Uncompressing $posts_file"
-	7za -y x $zipped_posts PostHistory.xml > /dev/null
+	7za -y x $zipped_posts Posts.xml > /dev/null
 
 	echo "Uncompressing $users_file"
 	7za -y x $zipped_users Users.xml > /dev/null
 
-	mv PostHistory.xml $posts_file
+	mv Posts.xml $posts_file
 	mv Users.xml $users_file
+
+	echo "Removing file $zipped_posts"
 	rm $zipped_posts
+
+	echo "Removing file $zipped_users"
 	rm $zipped_users
 
 else
@@ -52,15 +56,16 @@ else
 	wget $download_link$zipped_file -q --show-progress
 
 	echo "Uncompressing $posts_file"
-	7za -y x $zipped_file PostHistory.xml > /dev/null
+	7za -y x $zipped_file Posts.xml > /dev/null
 
 	echo "Uncompressing $users_file"
 	7za -y x $zipped_file Users.xml > /dev/null
 
-	mv PostHistory.xml $posts_file
+	mv Posts.xml $posts_file
 	mv Users.xml $users_file
+
+	echo "Removing file $zipped_file"
 	rm $zipped_file
 
 fi
 
-echo "Done"
