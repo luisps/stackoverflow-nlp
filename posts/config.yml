@@ -10,4 +10,3 @@ params:
     bulk_size: 100000
     insert_answers_body: False
     verbose: True
-

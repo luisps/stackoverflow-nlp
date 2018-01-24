@@ -5,75 +5,6 @@ import os
 import yaml
 import subprocess
 import sys
-import re
-
-def create_tables(conn, cur):
-
-    #create table for questions
-    create_table_query = '''
-CREATE TABLE Questions (
-    Id INTEGER,
-    UserId INTEGER,
-    Title TEXT,
-    Tags TEXT,
-    CreationDate TEXT,
-    Body TEXT,
-    PRIMARY KEY (Id)
-)
-    '''
-    cur.execute('DROP TABLE IF EXISTS Questions')
-    cur.execute(create_table_query)
-    
-    #create view of Questions without body(makes select statements faster to type)
-    cur.execute('DROP VIEW IF EXISTS q')
-    cur.execute('CREATE VIEW q AS SELECT Id, UserId, Title, Tags, CreationDate FROM Questions')
-
-    #create table for tags
-    create_table_query = '''
-CREATE TABLE Tags (
-    QuestionId INTEGER,
-    Tag TEXT,
-    PRIMARY KEY (QuestionId, Tag)
-)
-'''
-    cur.execute('DROP TABLE IF EXISTS Tags')
-    cur.execute(create_table_query)
-
-    #create table for answers
-    create_table_query = '''
-CREATE TABLE Answers (
-    Id INTEGER,
-    UserId INTEGER,
-    CreationDate TEXT,
-    Body TEXT,
-    PRIMARY KEY (Id)
-)
-    '''
-    cur.execute('DROP TABLE IF EXISTS Answers')
-    cur.execute(create_table_query)
-    
-    #create view of Answers without body(makes select statements faster to type)
-    cur.execute('DROP VIEW IF EXISTS a')
-    cur.execute('CREATE VIEW a AS SELECT Id, UserId, CreationDate FROM Answers')
-
-    #create table for users
-    create_table_query = '''
-CREATE TABLE Users (
-    Id INTEGER,
-    Reputation INTEGER,
-    CreationDate TEXT,
-    DisplayName TEXT,
-    UpVotes INTEGER,
-    DownVotes INTEGER,
-    PRIMARY KEY (Id)
-)
-'''
-    cur.execute('DROP TABLE IF EXISTS Users')
-    cur.execute(create_table_query)
-
-    #empty otherwise unused space and commit table creation
-    cur.execute('vacuum')
-    conn.commit()
 
 def import_posts(posts_file, conn, cur, params):
 
@@ -95,8 +26,14 @@ def import_posts(posts_file, conn, cur, params):
             bulk_seen += 1
 
             if use_bulk_insert and bulk_seen >= bulk_size:
-                bulk_insert(questions_to_insert, answers_to_insert, conn, cur)
+                cur.executemany('INSERT INTO Questions VALUES (?,?,?,?,?,?)', questions_to_insert)
+                questions_to_insert.clear()
+
+                cur.executemany('INSERT INTO Answers VALUES (?,?,?,?)', answers_to_insert)
+                answers_to_insert.clear()
+
                 bulk_seen = 0
+                conn.commit()
 
         #resource cleaning - contributes to small memory footprint
         elem.clear()
@@ -104,7 +41,12 @@ def import_posts(posts_file, conn, cur, params):
             del elem.getparent()[0]
 
     if bulk_seen != 0:
-        bulk_insert(questions_to_insert, answers_to_insert, conn, cur)
+        cur.executemany('INSERT INTO Questions VALUES (?,?,?,?,?,?)', questions_to_insert)
+        questions_to_insert.clear()
+
+        cur.executemany('INSERT INTO Answers VALUES (?,?,?,?)', answers_to_insert)
+        answers_to_insert.clear()
+        conn.commit()
 
 def row_filter(elem):
 
@@ -148,47 +90,6 @@ def row_process(questions_to_insert, answers_to_insert, params, elem):
 
         answers_to_insert.append(answer)
 
-def bulk_insert(questions_to_insert, answers_to_insert, conn, cur):
-
-    cur.executemany('INSERT INTO Questions VALUES (?,?,?,?,?,?)', questions_to_insert)
-    questions_to_insert.clear()
-
-    cur.executemany('INSERT INTO Answers VALUES (?,?,?,?)', answers_to_insert)
-    answers_to_insert.clear()
-    conn.commit()
-
-def import_tags(conn, cur, params):
-
-    tags_to_insert = []
-    use_bulk_insert = params['use_bulk_insert']
-    bulk_size = params['bulk_size']
-
-    #compile regex outside the loop for efficiency
-    tag_re = re.compile('<(.*?)>')
-
-    select_iter = cur.execute('SELECT Id, Tags FROM Questions')
-    bulk_seen = 0
-    insert_cur = conn.cursor()
-
-    for row in select_iter:
-        question_id, tag_str = row
-        tag_list = tag_re.findall(tag_str) if tag_str else []
-
-        tags_to_insert += [(question_id, tag) for tag in tag_list]
-        bulk_seen += len(tags_to_insert)
-
-        if use_bulk_insert and bulk_seen >= bulk_size:
-            insert_cur.executemany('INSERT INTO Tags VALUES (?,?)', tags_to_insert)
-            tags_to_insert.clear()
-
-            bulk_seen = 0
-            conn.commit()
-
-    if bulk_seen != 0:
-        insert_cur.executemany('INSERT INTO Tags VALUES (?,?)', tags_to_insert)
-        tags_to_insert.clear()
-        conn.commit()
-
 def import_users(users_file, conn, cur, params):
 
     users_to_insert = []
@@ -223,14 +124,8 @@ def import_users(users_file, conn, cur, params):
         users_to_insert.clear()
         conn.commit()
 
-def post_preprocess(conn, cur):
-
-    #convert tab characters in Title to spaces
-    #cur.execute("UPDATE Questions SET Title = REPLACE(Title, char(9), ' ')")
-
     #delete user with Id = -1 since it corresponds to a bot
     cur.execute('DELETE FROM Users WHERE Id = -1')
-
     conn.commit()
 
 
@@ -262,7 +157,10 @@ conn = sqlite3.connect(db_file)
 cur = conn.cursor()
 
 start = timer()
-create_tables(conn, cur)
+with open('create_tables.sql') as f:
+    cur.executescript(f.read())
+conn.commit()
+
 print('Creating tables took {:.2f}s'.format(timer() - start))
 
 print('Started importing posts')
@@ -271,16 +169,15 @@ import_posts(posts_file, conn, cur, params)
 print('Importing posts took {:.2f}s'.format(timer() - start))
 
 start = timer()
-import_tags(conn, cur, params)
+with open('populate_tags_table.sql') as f:
+    cur.execute(f.read())
+conn.commit()
+
 print('Importing tags took {:.2f}s'.format(timer() - start))
 
 start = timer()
 import_users(users_file, conn, cur, params)
 print('Importing users took {:.2f}s'.format(timer() - start))
-
-start = timer()
-post_preprocess(conn, cur)
-print('Preprocessing posts took {:.2f}s'.format(timer() - start))
 
 print('Created DB file', db_file)
 
