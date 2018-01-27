@@ -220,7 +220,7 @@ df = pd.read_sql_query(highest_tag_score_query.format(min_tag_freq, max_tags), c
 del df.index.name
 s = df['Score']
 
-ax = s.plot.barh(title='Tags with the highest average score')
+ax = s.plot.barh(title='Tags with the highest score')
 ax.invert_yaxis()
 plt.tight_layout()
 
@@ -330,5 +330,114 @@ plt.savefig(plot_file)
 plt.close()
 print ('Created', plot_file)
 
+
+#plot the tags for which users mostly ask questions on their early days
+tags_user_early_days_query = '''
+SELECT Days, Tag, COUNT(*) AS Count
+FROM Tags, UserFreshness
+WHERE Tags.QuestionId = UserFreshness.QuestionId
+AND Days <= {}
+GROUP BY Days, Tag
+ORDER BY Days, COUNT(*) DESC
+'''
+num_keep_tags = 20
+max_days = 7
+df = pd.read_sql_query(tags_user_early_days_query.format(max_days), conn, ['Days', 'Tag'])
+
+def aggregate_others(group, keep_tags):
+    """
+    aggregate counts for all tags that aren't keep_tags
+    into a single tag called others, the result series
+    becomes keep_tags + others
+    """
+
+    group = group.reset_index(level=0, drop=True)
+    s_keep = group.loc[keep_tags]
+    count_others = group.sum() - s_keep.sum()
+
+    s_others = pd.Series([count_others], index=['Others'])
+    s_keep = s_keep.append(s_others)
+
+    return s_keep
+
+
+#keep_tags is set to be the tags with the highest counts on day 0
+s = df['Count']
+keep_tags = list(s.loc[0].head(num_keep_tags).index)
+
+s_keep = s.groupby(level=0).apply(aggregate_others, keep_tags)
+df = s_keep.unstack(level=1)
+
+old_palette = sns.color_palette()
+curr_palette = old_palette.copy()
+
+#add color of gray for others
+rgb_gray = (0.7, 0.7, 0.7)
+curr_palette.insert(num_keep_tags, rgb_gray)
+sns.set_palette(curr_palette)
+
+fig, axes = plt.subplots(nrows=2, ncols=1)
+axes[0].set_title('User early days on StackOverflow')
+#fig.set_size_inches(8.5, 4.0)
+
+df.plot(kind='area', ax=axes[0])
+axes[0].get_yaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
+axes[0].legend(loc='upper right', ncol=3)
+axes[0].set_xlabel('')
+
+#normalize tag counts for each day
+df = df.div(df.sum(axis=1), axis=0)
+
+df.plot(kind='area', ax=axes[1])
+axes[1].legend().set_visible(False)
+
+#revert back to previous color palette
+sns.set_palette(old_palette)
+
+plot_file = os.path.join(images_dir, 'user_early_days.png')
+plt.savefig(plot_file)
+plt.close()
+print ('Created', plot_file)
+
+
+#plot number of answers for most popular tags
+num_answers_per_tag_query = '''
+SELECT Tag, numAnswers, COUNT(numAnswers) AS Count FROM (
+    SELECT Tag, COUNT(Answers.QuestionId) as numAnswers
+    FROM Tags LEFT JOIN Answers
+    ON Tags.QuestionId = Answers.QuestionId
+    WHERE Tag IN {}
+    GROUP BY Tag, Tags.QuestionId
+) GROUP BY Tag, numAnswers
+'''
+df = pd.read_sql_query(num_answers_per_tag_query.format(popular_tags), conn, ['Tag', 'numAnswers'])
+
+def aggregate_num_answers(group, max_answers=5):
+
+    group = group.reset_index(level=0, drop=True)
+    s_keep = group.iloc[:max_answers+1]
+    count_others = group.iloc[max_answers+1:].sum()
+
+    s_others = pd.Series([count_others], index=[str(max_answers) + '+'])
+    s_keep = s_keep.append(s_others)
+
+    return s_keep
+
+s = df['Count']
+s = s.groupby(level=0).apply(aggregate_num_answers)
+
+df = s.unstack(level=0)
+del df.index.name
+df = df[list(popular_tags)]
+
+axes = df.plot(kind='barh', subplots=True, figsize=(8,15), title=['']*len(popular_tags))
+for ax in axes:
+    ax.invert_yaxis()
+    ax.get_xaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
+
+plot_file = os.path.join(images_dir, 'popular_tags_num_answers.png')
+plt.savefig(plot_file)
+plt.close()
+print ('Created', plot_file)
 
 conn.close()
