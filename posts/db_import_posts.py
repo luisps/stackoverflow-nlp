@@ -10,13 +10,16 @@ def import_posts(posts_file, conn, cur, params):
 
     use_bulk_insert = params['use_bulk_insert']
     bulk_size = params['bulk_size']
+    params['currentMonth'] = ''
 
-    context = etree.iterparse(posts_file, events=('end',), tag='row')
-    bulk_seen = 0
+    insert_questions_query = 'INSERT INTO Questions VALUES (?,?,?,?,?,?,?,?,?)'
+    insert_answers_query = 'INSERT INTO Answers VALUES (?,?,?,?,?,?,?)'
 
     questions_to_insert = []
     answers_to_insert = []
-    params['currentMonth'] = ''
+
+    context = etree.iterparse(posts_file, events=('end',), tag='row')
+    bulk_seen = 0
 
     for event, elem in context:
 
@@ -26,10 +29,10 @@ def import_posts(posts_file, conn, cur, params):
             bulk_seen += 1
 
             if use_bulk_insert and bulk_seen >= bulk_size:
-                cur.executemany('INSERT INTO Questions VALUES (?,?,?,?,?,?)', questions_to_insert)
+                cur.executemany(insert_questions_query, questions_to_insert)
                 questions_to_insert.clear()
 
-                cur.executemany('INSERT INTO Answers VALUES (?,?,?,?)', answers_to_insert)
+                cur.executemany(insert_answers_query, answers_to_insert)
                 answers_to_insert.clear()
 
                 bulk_seen = 0
@@ -41,10 +44,10 @@ def import_posts(posts_file, conn, cur, params):
             del elem.getparent()[0]
 
     if bulk_seen != 0:
-        cur.executemany('INSERT INTO Questions VALUES (?,?,?,?,?,?)', questions_to_insert)
+        cur.executemany(insert_questions_query, questions_to_insert)
         questions_to_insert.clear()
 
-        cur.executemany('INSERT INTO Answers VALUES (?,?,?,?)', answers_to_insert)
+        cur.executemany(insert_answers_query, answers_to_insert)
         answers_to_insert.clear()
         conn.commit()
 
@@ -68,6 +71,8 @@ def row_process(questions_to_insert, answers_to_insert, params, elem):
 
     userId = int(elem.attrib['OwnerUserId'])
     creationDate = elem.attrib['CreationDate'][:10]
+    score = int(elem.attrib['Score'])
+    commentCount = int(elem.attrib['CommentCount'])
 
     if postTypeId == 1 or params['insert_answers_body']:
         body = elem.attrib['Body']
@@ -81,34 +86,38 @@ def row_process(questions_to_insert, answers_to_insert, params, elem):
         params['currentMonth'] = currentMonth
 
     if postTypeId == 1:
-        question = (postId, userId, elem.attrib['Title'],
-                    elem.attrib['Tags'], creationDate, body)
+        acceptedAnswerId = int(elem.attrib['AcceptedAnswerId']) if 'AcceptedAnswerId' in elem.attrib else None
+        question = (postId, userId, acceptedAnswerId, creationDate, score, commentCount,
+                    elem.attrib['Title'], elem.attrib['Tags'], body)
 
         questions_to_insert.append(question)
     else:
-        answer = (postId, userId, creationDate, body)
+        answer = (postId, userId, int(elem.attrib['ParentId']),
+                  creationDate, score, commentCount, body)
 
         answers_to_insert.append(answer)
 
 def import_users(users_file, conn, cur, params):
 
-    users_to_insert = []
     use_bulk_insert = params['use_bulk_insert']
     bulk_size = params['bulk_size']
+
+    insert_users_query = 'INSERT INTO Users VALUES (?,?,?,?)'
+    users_to_insert = []
 
     context = etree.iterparse(users_file, events=('end',), tag='row')
     bulk_seen = 0
 
     for event, elem in context:
 
-        user = (int(elem.attrib['Id']), int(elem.attrib['Reputation']), elem.attrib['CreationDate'][:10],
-                elem.attrib['DisplayName'], int(elem.attrib['UpVotes']), int(elem.attrib['DownVotes']))
+        user = (int(elem.attrib['Id']), elem.attrib['CreationDate'][:10],
+                elem.attrib['DisplayName'], int(elem.attrib['Reputation']))
 
         users_to_insert.append(user)
         bulk_seen += 1
 
         if use_bulk_insert and bulk_seen >= bulk_size:
-            cur.executemany('INSERT INTO Users VALUES (?,?,?,?,?,?)', users_to_insert)
+            cur.executemany(insert_users_query, users_to_insert)
             users_to_insert.clear()
 
             bulk_seen = 0
@@ -120,14 +129,26 @@ def import_users(users_file, conn, cur, params):
             del elem.getparent()[0]
 
     if bulk_seen != 0:
-        cur.executemany('INSERT INTO Users VALUES (?,?,?,?,?,?)', users_to_insert)
+        cur.executemany(insert_users_query, users_to_insert)
         users_to_insert.clear()
         conn.commit()
 
     #delete user with Id = -1 since it corresponds to a bot
-    cur.execute('DELETE FROM Users WHERE Id = -1')
+    cur.execute('DELETE FROM Users WHERE UserId = -1')
     conn.commit()
 
+def calc_derived_measures(conn, cur):
+
+    calc_user_freshness_query = '''
+    INSERT INTO UserFreshness
+    SELECT QuestionId, CAST(julianday(Questions.CreationDate) - julianday(Users.CreationDate) AS INTEGER) AS Days
+    FROM Questions, Users
+    WHERE Questions.UserId = Users.UserId
+    AND Days >= 0
+    '''
+    cur.execute(calc_user_freshness_query)
+
+    conn.commit()
 
 #change cwd to the directory that holds the script
 os.chdir(sys.path[0])
@@ -178,6 +199,10 @@ print('Importing tags took {:.2f}s'.format(timer() - start))
 start = timer()
 import_users(users_file, conn, cur, params)
 print('Importing users took {:.2f}s'.format(timer() - start))
+
+start = timer()
+calc_derived_measures(conn, cur)
+print('Calculating derived measures took {:.2f}s'.format(timer() - start))
 
 print('Created DB file', db_file)
 

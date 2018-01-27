@@ -1,31 +1,33 @@
 
 DROP TABLE IF EXISTS Questions;
 CREATE TABLE Questions (
-    Id INTEGER,
+    QuestionId INTEGER,
     UserId INTEGER,
+    AcceptedAnswerId INTEGER,
+    CreationDate TEXT,
+    Score INTEGER,
+    CommentCount INTEGER,
     Title TEXT,
     Tags TEXT,
-    CreationDate TEXT,
     Body TEXT,
-    PRIMARY KEY (Id)
+    PRIMARY KEY (QuestionId),
+    FOREIGN KEY (UserId) REFERENCES Users(UserId),
+    FOREIGN KEY (AcceptedAnswerId) REFERENCES Answers(AnswerId)
 );
-    
--- create view of Questions without body(makes select statements faster to type)
-DROP VIEW IF EXISTS q;
-CREATE VIEW q AS SELECT Id, UserId, Title, Tags, CreationDate FROM Questions;
 
 DROP TABLE IF EXISTS Answers;
 CREATE TABLE Answers (
-    Id INTEGER,
+    AnswerId INTEGER,
     UserId INTEGER,
+    QuestionId INTEGER,
     CreationDate TEXT,
+    Score INTEGER,
+    CommentCount INTEGER,
     Body TEXT,
-    PRIMARY KEY (Id)
+    PRIMARY KEY (AnswerId),
+    FOREIGN KEY (UserId) REFERENCES Users(UserId),
+    FOREIGN KEY (QuestionId) REFERENCES Questions(QuestionId)
 );
-
--- create view of Answers without body(makes select statements faster to type)
-DROP VIEW IF EXISTS a;
-CREATE VIEW a AS SELECT Id, UserId, CreationDate FROM Answers;
 
 DROP TABLE IF EXISTS Tags;
 CREATE TABLE Tags (
@@ -36,14 +38,20 @@ CREATE TABLE Tags (
 
 DROP TABLE IF EXISTS Users;
 CREATE TABLE Users (
-    Id INTEGER,
-    Reputation INTEGER,
+    UserId INTEGER,
     CreationDate TEXT,
     DisplayName TEXT,
-    UpVotes INTEGER,
-    DownVotes INTEGER,
-    PRIMARY KEY (Id)
+    Reputation INTEGER,
+    PRIMARY KEY (UserId)
 );
 
--- empty otherwise unused space - useful when recreating the database often
+DROP TABLE IF EXISTS UserFreshness;
+CREATE TABLE UserFreshness (
+    QuestionId INTEGER,
+    Days INTEGER,
+    PRIMARY KEY (QuestionId),
+    FOREIGN KEY (QuestionId) REFERENCES Questions(QuestionId)
+);
+
+-- empty unused space - useful when recreating the database from a larger one
 VACUUM
