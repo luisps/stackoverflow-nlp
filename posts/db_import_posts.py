@@ -137,18 +137,6 @@ def import_users(users_file, conn, cur, params):
     cur.execute('DELETE FROM Users WHERE UserId = -1')
     conn.commit()
 
-def calc_derived_measures(conn, cur):
-
-    calc_user_freshness_query = '''
-    INSERT INTO UserFreshness
-    SELECT QuestionId, CAST(julianday(Questions.CreationDate) - julianday(Users.CreationDate) AS INTEGER) AS Days
-    FROM Questions, Users
-    WHERE Questions.UserId = Users.UserId
-    AND Days >= 0
-    '''
-    cur.execute(calc_user_freshness_query)
-
-    conn.commit()
 
 #change cwd to the directory that holds the script
 os.chdir(sys.path[0])
@@ -180,28 +168,30 @@ cur = conn.cursor()
 start = timer()
 with open('create_tables.sql') as f:
     cur.executescript(f.read())
-conn.commit()
 
+conn.commit()
 print('Creating tables took {:.2f}s'.format(timer() - start))
 
-print('Started importing posts')
 start = timer()
 import_posts(posts_file, conn, cur, params)
 print('Importing posts took {:.2f}s'.format(timer() - start))
-
-start = timer()
-with open('populate_tags_table.sql') as f:
-    cur.execute(f.read())
-conn.commit()
-
-print('Importing tags took {:.2f}s'.format(timer() - start))
 
 start = timer()
 import_users(users_file, conn, cur, params)
 print('Importing users took {:.2f}s'.format(timer() - start))
 
 start = timer()
-calc_derived_measures(conn, cur)
+with open('populate_tags_table.sql') as f:
+    cur.executescript(f.read())
+
+conn.commit()
+print('Importing tags took {:.2f}s'.format(timer() - start))
+
+start = timer()
+with open('calc_derived_measures.sql') as f:
+    cur.executescript(f.read())
+
+conn.commit()
 print('Calculating derived measures took {:.2f}s'.format(timer() - start))
 
 print('Created DB file', db_file)
