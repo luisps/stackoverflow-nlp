@@ -1,10 +1,10 @@
-from timeit import default_timer as timer
 from lxml import etree
 import sqlite3
 import os
 import yaml
 import subprocess
 import sys
+from timeit import default_timer as timer
 
 def import_posts(posts_file, conn, cur, params):
 
@@ -152,8 +152,8 @@ params = config['params']
 if region not in available_regions:
     sys.exit('Region must be one of the available regions: ' + ', '.join(available_regions))
 
-posts_file = 'Posts_{}.xml'.format(region)
-users_file = 'Users_{}.xml'.format(region)
+posts_file = os.path.join('xml-data', 'Posts_{}.xml'.format(region))
+users_file = os.path.join('xml-data', 'Users_{}.xml'.format(region))
 db_file = 'Posts_{}.db'.format(region)
 
 #download XML files if not available locally
@@ -166,7 +166,7 @@ conn = sqlite3.connect(db_file)
 cur = conn.cursor()
 
 start = timer()
-with open('create_tables.sql') as f:
+with open(os.path.join('sql', 'create_tables.sql')) as f:
     cur.executescript(f.read())
 
 conn.commit()
@@ -181,14 +181,21 @@ import_users(users_file, conn, cur, params)
 print('Importing users took {:.2f}s'.format(timer() - start))
 
 start = timer()
-with open('populate_tags_table.sql') as f:
+with open(os.path.join('sql', 'populate_tags_table.sql')) as f:
     cur.executescript(f.read())
 
 conn.commit()
 print('Importing tags took {:.2f}s'.format(timer() - start))
 
 start = timer()
-with open('calc_derived_measures.sql') as f:
+with open(os.path.join('sql', 'create_indexes.sql')) as f:
+    cur.executescript(f.read())
+
+conn.commit()
+print('Creating indexes took {:.2f}s'.format(timer() - start))
+
+start = timer()
+with open(os.path.join('sql', 'calc_derived_measures.sql')) as f:
     cur.executescript(f.read())
 
 conn.commit()

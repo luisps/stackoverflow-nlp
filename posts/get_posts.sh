@@ -18,8 +18,9 @@ else
 	region=$1
 fi
 
-posts_file="Posts_$region.xml"
-users_file="Users_$region.xml"
+mkdir -p xml-data
+posts_file="xml-data/Posts_$region.xml"
+users_file="xml-data/Users_$region.xml"
 if [ -f $posts_file ] && [ -f $users_file ]; then
 	echo "$posts_file and $users_file already exist"
 	exit

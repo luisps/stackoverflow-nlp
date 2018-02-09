@@ -10,6 +10,6 @@ saved-models/
 images/
 samples/
 
-posts/*.xml
+posts/xml-data/
 posts/*.7z
 posts/*.db
