@@ -4,7 +4,7 @@ CREATE TABLE Questions (
     QuestionId INTEGER,
     UserId INTEGER,
     AcceptedAnswerId INTEGER,
-    CreationDate TEXT,
+    CreationDateTime TEXT,
     Score INTEGER,
     CommentCount INTEGER,
     Title TEXT,
@@ -20,7 +20,7 @@ CREATE TABLE Answers (
     AnswerId INTEGER,
     UserId INTEGER,
     QuestionId INTEGER,
-    CreationDate TEXT,
+    CreationDateTime TEXT,
     Score INTEGER,
     CommentCount INTEGER,
     Body TEXT,
@@ -39,18 +39,10 @@ CREATE TABLE Tags (
 DROP TABLE IF EXISTS Users;
 CREATE TABLE Users (
     UserId INTEGER,
-    CreationDate TEXT,
+    CreationDateTime TEXT,
     DisplayName TEXT,
     Reputation INTEGER,
     PRIMARY KEY (UserId)
-);
-
-DROP TABLE IF EXISTS UserFreshness;
-CREATE TABLE UserFreshness (
-    QuestionId INTEGER,
-    Days INTEGER,
-    PRIMARY KEY (QuestionId),
-    FOREIGN KEY (QuestionId) REFERENCES Questions(QuestionId)
 );
 
 -- empty unused space - useful when recreating the database from a larger one

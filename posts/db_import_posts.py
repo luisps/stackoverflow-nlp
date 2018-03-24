@@ -55,22 +55,16 @@ def row_filter(elem):
 
     #discard rows that are not questions or answers
     postTypeId = int(elem.attrib['PostTypeId'])
-    if postTypeId != 1 and postTypeId != 2:
-        return False
 
-    #discard posts with a deleted user
-    if 'OwnerUserId' not in elem.attrib:
-        return False
-
-    return True
+    return postTypeId == 1 or postTypeId == 2
 
 def row_process(questions_to_insert, answers_to_insert, params, elem):
 
     postId = int(elem.attrib['Id'])
     postTypeId = int(elem.attrib['PostTypeId'])
 
-    userId = int(elem.attrib['OwnerUserId'])
-    creationDate = elem.attrib['CreationDate'][:10]
+    userId = int(elem.attrib['OwnerUserId']) if 'OwnerUserId' in elem.attrib else None
+    creationDateTime = elem.attrib['CreationDate']
     score = int(elem.attrib['Score'])
     commentCount = int(elem.attrib['CommentCount'])
 
@@ -80,20 +74,20 @@ def row_process(questions_to_insert, answers_to_insert, params, elem):
     else:
         body = None
 
-    currentMonth = creationDate[:7]
+    currentMonth = creationDateTime[:7]
     if params['verbose'] and currentMonth > params['currentMonth']:
         print('Importing posts from {}'.format(currentMonth))
         params['currentMonth'] = currentMonth
 
     if postTypeId == 1:
         acceptedAnswerId = int(elem.attrib['AcceptedAnswerId']) if 'AcceptedAnswerId' in elem.attrib else None
-        question = (postId, userId, acceptedAnswerId, creationDate, score, commentCount,
+        question = (postId, userId, acceptedAnswerId, creationDateTime, score, commentCount,
                     elem.attrib['Title'], elem.attrib['Tags'], body)
 
         questions_to_insert.append(question)
     else:
         answer = (postId, userId, int(elem.attrib['ParentId']),
-                  creationDate, score, commentCount, body)
+                  creationDateTime, score, commentCount, body)
 
         answers_to_insert.append(answer)
 
@@ -110,7 +104,7 @@ def import_users(users_file, conn, cur, params):
 
     for event, elem in context:
 
-        user = (int(elem.attrib['Id']), elem.attrib['CreationDate'][:10],
+        user = (int(elem.attrib['Id']), elem.attrib['CreationDate'],
                 elem.attrib['DisplayName'], int(elem.attrib['Reputation']))
 
         users_to_insert.append(user)
