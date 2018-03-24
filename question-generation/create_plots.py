@@ -4,6 +4,7 @@ import yaml
 import sys
 import numpy as np
 import pandas as pd
+from timeit import default_timer as timer
 
 import matplotlib
 matplotlib.use('Agg')
@@ -65,22 +66,23 @@ cur = conn.cursor()
 
 
 #plot number of questions, answers and new users through time
+start = timer()
 questions_per_day_query = '''
-SELECT CreationDate, COUNT(QuestionId) AS Questions
+SELECT date(CreationDateTime) AS CreationDate, COUNT(QuestionId) AS Questions
 FROM Questions
 GROUP BY CreationDate
 '''
 questions_per_day = pd.read_sql_query(questions_per_day_query, conn, 'CreationDate', parse_dates=['CreationDate'])
 
 answers_per_day_query = '''
-SELECT CreationDate, COUNT(AnswerId) AS Answers
+SELECT date(CreationDateTime) AS CreationDate, COUNT(AnswerId) AS Answers
 FROM Answers
 GROUP BY CreationDate
 '''
 answers_per_day = pd.read_sql_query(answers_per_day_query, conn, 'CreationDate', parse_dates=['CreationDate'])
 
 new_users_per_day_query = '''
-SELECT CreationDate, COUNT(UserId) AS NewUsers
+SELECT date(CreationDateTime) AS CreationDate, COUNT(UserId) AS NewUsers
 FROM Users
 GROUP BY CreationDate
 '''
@@ -111,10 +113,11 @@ ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
 plot_file = os.path.join(images_dir, 'stackoverflow_evolution.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot most popular tags - tags with the most number of questions
+start = timer()
 popular_tags_query = '''
 SELECT Tag, COUNT(QuestionId) AS Count
 FROM Tags
@@ -136,12 +139,13 @@ ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
 plot_file = os.path.join(images_dir, 'popular_tags_num_questions.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot number of questions through time for most popular tags
+start = timer()
 tag_questions_per_day_query = '''
-SELECT Tag, CreationDate, COUNT(*) AS Count
+SELECT Tag, date(CreationDateTime) AS CreationDate, COUNT(*) AS Count
 FROM Questions, Tags
 WHERE Questions.QuestionId = Tags.QuestionId AND Tag IN {}
 GROUP BY Tag, CreationDate
@@ -171,10 +175,11 @@ ax.get_yaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
 plot_file = os.path.join(images_dir, 'popular_tags_evolution.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot tags that most co-occur in questions with popular tags
+start = timer()
 tag_co_occurrence_query = '''
 SELECT t1.Tag AS Tag1, t2.Tag AS Tag2, COUNT(*) AS Count
 FROM Tags t1, Tags t2
@@ -210,10 +215,11 @@ plt.tight_layout()
 plot_file = os.path.join(images_dir, 'popular_tags_co_occurrence.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot number of answers for most popular tags
+start = timer()
 num_answers_per_tag_query = '''
 SELECT Tag, numAnswers, COUNT(numAnswers) AS Count FROM (
     SELECT Tag, COUNT(Answers.QuestionId) as numAnswers
@@ -257,10 +263,11 @@ for ax in axes:
 plot_file = os.path.join(images_dir, 'popular_tags_num_answers.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
-#plot of KDE density estimation of number of answers for popular tags
+#plot KDE density estimation of number of answers for most popular tags
+start = timer()
 bw = 3.5 if region == 'en' else 0.5
 xlim = (-1.5, 10) if region == 'en' else (-0.5, 4.5)
 
@@ -271,22 +278,29 @@ for tag in popular_tags:
     sns.kdeplot(num_answers_unrolled, bw=bw)
 
 plt.title('KDE estimation of number of answers for popular tags')
+plt.xlabel('Number of answers')
+plt.ylabel('Density')
+
 plt.xlim(*xlim)
 plt.ylim(ymin=0.0)
 
 plot_file = os.path.join(images_dir, 'popular_tags_num_answers_kde.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot number of answers per question
+start = timer()
 num_answers_query = '''
+SELECT 0 AS numAnswers, COUNT(*) AS Count FROM (
+    SELECT DISTINCT QuestionId FROM Tags
+    EXCEPT SELECT QuestionId FROM Answers
+) UNION ALL
 SELECT numAnswers, COUNT(numAnswers) AS Count FROM (
-    SELECT COUNT(Answers.QuestionId) as numAnswers
-    FROM Questions LEFT JOIN Answers
-    ON Questions.QuestionId = Answers.QuestionId
-    GROUP BY Questions.QuestionId
+    SELECT COUNT(QuestionId) AS numAnswers
+    FROM Answers
+    GROUP BY QuestionId
 ) GROUP BY numAnswers
 '''
 df = pd.read_sql_query(num_answers_query, conn, 'numAnswers')
@@ -301,13 +315,13 @@ ax.get_xaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
 plot_file = os.path.join(images_dir, 'num_answers.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot number of tags per question
+start = timer()
 num_tags_query = '''
-SELECT numTags, COUNT(numTags) AS Count
-FROM (
+SELECT numTags, COUNT(numTags) AS Count FROM (
     SELECT COUNT(Tag) AS numTags
     FROM Tags
     GROUP BY QuestionId
@@ -326,12 +340,107 @@ ax.get_xaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
 plot_file = os.path.join(images_dir, 'num_tags.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
+
+
+#plot elapsed time until a question gets answered
+start = timer()
+days_to_first_answer_query = '''
+SELECT MIN(ElapsedDays) AS ElapsedDays
+FROM AnswerFreshness
+GROUP BY QuestionId
+'''
+max_days = 7
+max_quantile = 0.995
+df_first_answer = pd.read_sql_query(days_to_first_answer_query, conn)
+df_first_answer.rename(columns={'ElapsedDays': 'Days to first answer'}, inplace=True)
+
+days_to_accepted_answer_query = '''
+SELECT ElapsedDays
+FROM AnswerFreshness
+WHERE IsAcceptedAnswer = 1
+'''
+df_accepted_answer = pd.read_sql_query(days_to_accepted_answer_query, conn)
+df_accepted_answer.rename(columns={'ElapsedDays': 'Days to accepted answer'}, inplace=True)
+
+df_time_to_answer = pd.concat([df_first_answer, df_accepted_answer], axis=1)
+
+#simple outlier detection and removal based on quantiles
+quantiles = df_time_to_answer.quantile(max_quantile)
+df_time_to_answer = df_time_to_answer[(df_time_to_answer['Days to first answer'] < quantiles.loc['Days to first answer']) &
+                                      (df_time_to_answer['Days to accepted answer'] < quantiles.loc['Days to accepted answer'])]
+
+ax = df_time_to_answer.plot.kde()
+ax.set_title('Time until a question gets answered')
+ax.set_xlim(xmin=0.0, xmax=max_days)
+ax.set_xlabel('Days')
+
+plot_file = os.path.join(images_dir, 'time_to_answer.png')
+plt.savefig(plot_file)
+plt.close()
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
+
+
+#plot elapsed time until a question gets answered for most popular tags
+start = timer()
+days_to_first_answer_per_tag_query = '''
+SELECT Tag, MIN(ElapsedDays) AS ElapsedDays
+FROM Tags, AnswerFreshness
+WHERE Tags.QuestionId = AnswerFreshness.QuestionId AND Tag IN {}
+GROUP BY AnswerFreshness.QuestionId, Tag
+'''
+df_first_answer = pd.read_sql_query(days_to_first_answer_per_tag_query.format(popular_tags), conn)
+
+#converting column Tag to Categorical datatype can save a considerable amount of RAM
+df_first_answer = df_first_answer.astype({'Tag': 'category'})
+df_first_answer.set_index('Tag', inplace=True)
+df_first_answer.rename(columns={'ElapsedDays': 'Days to first answer'}, inplace=True)
+
+days_to_accepted_answer_per_tag_query = '''
+SELECT Tag, ElapsedDays
+FROM Tags, AnswerFreshness
+WHERE Tags.QuestionId = AnswerFreshness.QuestionId AND Tag IN {}
+AND IsAcceptedAnswer = 1
+'''
+df_accepted_answer = pd.read_sql_query(days_to_accepted_answer_per_tag_query.format(popular_tags), conn)
+
+df_accepted_answer = df_accepted_answer.astype({'Tag': 'category'})
+df_accepted_answer.set_index('Tag', inplace=True)
+df_accepted_answer.rename(columns={'ElapsedDays': 'Days to accepted answer'}, inplace=True)
+
+df_time_to_answer = pd.concat([df_first_answer, df_accepted_answer], axis=1)
+fig, axes = plt.subplots(nrows=len(popular_tags), ncols=1)
+
+for idx, tag in enumerate(popular_tags):
+    df = df_time_to_answer.loc[tag]
+
+    #outlier detection and removal
+    quantiles = df.quantile(max_quantile)
+    df = df[(df['Days to first answer'] < quantiles.loc['Days to first answer']) &
+                                          (df['Days to accepted answer'] < quantiles.loc['Days to accepted answer'])]
+
+    df.plot.kde(ax=axes[idx])
+    axes[idx].set_xlim(xmin=0.0, xmax=max_days)
+    axes[idx].set_ylabel(tag)
+    axes[idx].legend().set_visible(False)
+
+axes[0].set_title('Time until a question gets answered for popular tags')
+axes[0].legend().set_visible(True)
+axes[-1].set_xlabel('Days')
+
+fig.set_size_inches(8, 15)
+plt.tight_layout()
+
+plot_file = os.path.join(images_dir, 'popular_tags_time_to_answer.png')
+plt.savefig(plot_file)
+plt.close()
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot user reputation through time based on when the user account was created
+start = timer()
 user_reputation_per_day_query = '''
-SELECT CreationDate, AVG(Reputation) AS Reputation
+SELECT date(CreationDateTime) AS CreationDate, AVG(Reputation) AS Reputation
 FROM Users
 GROUP BY CreationDate
 '''
@@ -350,21 +459,22 @@ axes[0].get_yaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
 plot_file = os.path.join(images_dir, 'user_reputation.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot the tags for which users mostly ask questions on their early days
+start = timer()
 tags_user_early_days_query = '''
-SELECT Days, Tag, COUNT(*) AS Count
-FROM Tags, UserFreshness
-WHERE Tags.QuestionId = UserFreshness.QuestionId
-AND Days <= {}
-GROUP BY Days, Tag
-ORDER BY Days, COUNT(*) DESC
+SELECT ElapsedDays, Tag, COUNT(*) AS Count
+FROM Tags, QuestionFreshness
+WHERE Tags.QuestionId = QuestionFreshness.QuestionId
+AND ElapsedDays <= {}
+GROUP BY ElapsedDays, Tag
+ORDER BY ElapsedDays, COUNT(*) DESC
 '''
 num_keep_tags = 20
 max_days = 7
-df = pd.read_sql_query(tags_user_early_days_query.format(max_days), conn, ['Days', 'Tag'])
+df = pd.read_sql_query(tags_user_early_days_query.format(max_days), conn, ['ElapsedDays', 'Tag'])
 
 def aggregate_others(group, keep_tags):
     '''
@@ -419,10 +529,11 @@ sns.set_palette(old_palette)
 plot_file = os.path.join(images_dir, 'user_early_days.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot tags with the highest average score
+start = timer()
 highest_tag_score_query = '''
 SELECT Tag, AVG(Score) AS Score FROM (
     SELECT Tag, Score
@@ -440,7 +551,7 @@ LIMIT {}
 df = pd.read_sql_query('SELECT COUNT(*) AS Count FROM Tags GROUP BY Tag', conn)
 tag_count = df['Count']
 
-region_std_coeff = 1.0 if region == 'en' else 2.5
+region_std_coeff = 0.5 if region == 'en' else 2.5
 min_tag_freq = int(tag_count.mean() + tag_count.std() / region_std_coeff)
 
 max_tags = 15
@@ -456,10 +567,11 @@ plt.tight_layout()
 plot_file = os.path.join(images_dir, 'highest_tag_score.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot tags with the most comments
+start = timer()
 most_tag_comments_query = '''
 SELECT Tag, AVG(CommentCount) AS Comments FROM (
     SELECT Tag, CommentCount
@@ -474,7 +586,7 @@ HAVING COUNT(Tag) > {}
 ORDER BY AVG(CommentCount) DESC
 LIMIT {}
 '''
-region_std_coeff = 1.0 if region == 'en' else 5.0
+region_std_coeff = 0.5 if region == 'en' else 5.0
 min_tag_freq = int(tag_count.mean() + tag_count.std() / region_std_coeff)
 
 max_tags = 15
@@ -490,10 +602,11 @@ plt.tight_layout()
 plot_file = os.path.join(images_dir, 'most_tag_comments.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot tags with highest and lowest ratio of questions with accepted answers to total questions
+start = timer()
 accepted_answers_ratio_per_tag_query = '''
 SELECT Tag, COUNT(AcceptedAnswerId) * 1.0 / COUNT(Questions.QuestionId) AS Ratio
 FROM Questions, Tags
@@ -532,10 +645,11 @@ for ax in axes:
 plot_file = os.path.join(images_dir, 'accepted_answer_ratio.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot tags with highest and lowest ratio of questions having at least one answer to total questions
+start = timer()
 any_answers_ratio_per_tag_query = '''
 SELECT Tag, COUNT(Answers.QuestionId) * 1.0 / COUNT(Tags.QuestionId) AS Ratio
 FROM Tags LEFT JOIN Answers
@@ -571,10 +685,11 @@ for ax in axes:
 plot_file = os.path.join(images_dir, 'any_answers_ratio.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 
 #plot total number of questions, answers and users for each region
+start = timer()
 region_metrics = {}
 
 for curr_region in available_regions:
@@ -619,6 +734,6 @@ axes[1].get_yaxis().set_major_formatter(ticker.FuncFormatter(tick_formatter))
 plot_file = os.path.join(images_root_dir, 'language_comparison.png')
 plt.savefig(plot_file)
 plt.close()
-print ('Created', plot_file)
+print ('{:.2f}s - Created {}'.format(timer() - start, plot_file))
 
 conn.close()
